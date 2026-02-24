@@ -6,14 +6,17 @@
   bool print_tokens = false;
   # define YY_USER_ACTION \
     collumn += yyleng;
+
+  #define OUT(fmt, ...) if(print_tokens) printf(fmt "\n", ##__VA_ARGS__)
 %}
 %X COMMENT
 %X STRING
 %X SL_COMMENT
-digit   [0-9]
+digit   ([0-9]([0-9_]*[0-9])?)
+expoent ([eE][+-]?{digit})
+natural 0|[1-9]([0-9_]*[0-9])?
 identifier  [a-zA-Z_][a-zA-Z0-9_]*
-decimal  [0-9]*\.[0-9]+
-string    \"[a-zA-z]*[\f\n\r]
+decimal {digit}*\.{digit}?{expoent}?
 assign "="
 lpar  "("
 rpar  ")"
@@ -60,69 +63,69 @@ reserved "++"|"--"|"null"|"Integer"|"System"
 <COMMENT>.              {}
 <COMMENT>"\n"           { line++; collumn = 1; }
 <COMMENT>"*/"           { BEGIN(0); }
-<COMMENT><<EOF>>        { printf("Line %d, col %d: unterminated comment\n ", line, collumn); yyterminate(); }
+<COMMENT><<EOF>>        { OUT("Line %d, col %d: unterminated comment\n ", line, collumn); yyterminate(); }
 
 \"                      { BEGIN(STRING); string_buffer[0] = '\0'; }
-<STRING>\"              { BEGIN(0); if(!error) printf("STRLIT(%s)\n", string_buffer); error = false;}
+<STRING>\"              { BEGIN(0); if(!error) OUT("STRLIT(%s)\n", string_buffer); error = false;}
 <STRING>\\([fnrt\\"])   { strcat(string_buffer, yytext); }
 <STRING>[^\\\n\"]+      { strcat(string_buffer, yytext); }
-<STRING>\\.             { error = true; printf("Line %d, col %d: invalid escape sequence (%s)\n", line, collumn, yytext); }
-<STRING>\n         { printf("Line %d, col %d: unterminated string literal\n", line, collumn); BEGIN(0); }
+<STRING>\\.             { error = true; OUT("Line %d, col %d: invalid escape sequence (%s)\n", line, collumn, yytext); }
+<STRING>\n         { OUT("Line %d, col %d: unterminated string literal\n", line, collumn); BEGIN(0); }
 
-{reserved}              { printf("RESERVED\n"); }
-{assign}                 {  printf("ASSIGN\n"); }
-{lpar}                  {  printf("LPAR\n"); }
-{rpar}                  {  printf("RPAR\n"); }
-{star}                  {  printf("STAR\n"); }
-{divide}                {  printf("DIVIDE\n"); }
-{plus}                  {  printf("PLUS\n"); }
-{minus}                 {  printf("MINUS\n"); }
-{comma}                 { printf("COMMA\n"); }
-{equal}                 { printf("EQ\n"); }
-{ge}                    { printf("GE\n"); }
-{gt}                    { printf("GT\n"); }
-{lbrace}                { printf("LBRACE\n"); }
-{rbrace}                { printf("RBRACE\n"); }
-{le}                    { printf("LE\n"); }
-{lsq}                    { printf("LSQ\n"); }
-{rsq}                    { printf("RSQ\n"); }
-{lt}                    { printf("LT\n"); }
-{mod}                    { printf("MOD\n"); }
-{ne}                    { printf("NE\n"); }
-{not}                   { printf("NOT\n"); }
-{or}                   { printf("OR\n"); }
-{semicollon}                   { printf("SEMICOLLON\n"); }
-{arrow}                   { printf("ARROW\n"); }
-{rshift}                   { printf("RSHIFT\n"); }
-{lshift}                   { printf("LSHIFT\n"); }
-{xor}                   { printf("XOR\n"); }
-{class}                   { printf("CLASS\n"); }
-".length"                 { printf("DOTLENGTH\n"); }
-{print}                   { printf("PRINT\n"); }
-{parseint}                   { printf("PARSEINT\n"); }
-{public}                   { printf("PUBLIC\n"); }
+{reserved}              { OUT("RESERVED\n"); }
+{assign}                 {  OUT("ASSIGN\n"); }
+{lpar}                  {  OUT("LPAR\n"); }
+{rpar}                  {  OUT("RPAR\n"); }
+{star}                  {  OUT("STAR\n"); }
+{divide}                {  OUT("DIVIDE\n"); }
+{plus}                  {  OUT("PLUS\n"); }
+{minus}                 {  OUT("MINUS\n"); }
+{comma}                 { OUT("COMMA\n"); }
+{equal}                 { OUT("EQ\n"); }
+{ge}                    { OUT("GE\n"); }
+{gt}                    { OUT("GT\n"); }
+{lbrace}                { OUT("LBRACE\n"); }
+{rbrace}                { OUT("RBRACE\n"); }
+{le}                    { OUT("LE\n"); }
+{lsq}                    { OUT("LSQ\n"); }
+{rsq}                    { OUT("RSQ\n"); }
+{lt}                    { OUT("LT\n"); }
+{mod}                    { OUT("MOD\n"); }
+{ne}                    { OUT("NE\n"); }
+{not}                   { OUT("NOT\n"); }
+{or}                   { OUT("OR\n"); }
+{semicollon}                   { OUT("SEMICOLLON\n"); }
+{arrow}                   { OUT("ARROW\n"); }
+{rshift}                   { OUT("RSHIFT\n"); }
+{lshift}                   { OUT("LSHIFT\n"); }
+{xor}                   { OUT("XOR\n"); }
+{class}                   { OUT("CLASS\n"); }
+".length"                 { OUT("DOTLENGTH\n"); }
+{print}                   { OUT("PRINT\n"); }
+{parseint}                   { OUT("PARSEINT\n"); }
+{public}                   { OUT("PUBLIC\n"); }
 
 
-"int"               {  printf("INT\n"); }
-{bool}                   { printf("BOOL\n"); }
-"double"                {  printf("DOUBLE\n"); }
-"if"                    {  printf("IF\n"); }
-"then"                  {  printf("THEN\n"); }
-"else"                  {  printf("ELSE\n"); }
-{return}                { printf("RETURN\n"); }
-"static"                { printf("STATIC\n"); }
-"String"                { printf("STRING\n"); }
-"void"                  { printf("VOID\n"); }
-"while"                 { printf("WHILE\n"); }
+"int"               {  OUT("INT\n"); }
+{bool}                   { OUT("BOOL\n"); }
+"double"                {  OUT("DOUBLE\n"); }
+"if"                    {  OUT("IF\n"); }
+"then"                  {  OUT("THEN\n"); }
+"else"                  {  OUT("ELSE\n"); }
+{return}                { OUT("RETURN\n"); }
+"static"                { OUT("STATIC\n"); }
+"String"                { OUT("STRING\n"); }
+"void"                  { OUT("VOID\n"); }
+"while"                 { OUT("WHILE\n"); }
 
-{digit}+                {  printf("DIGIT(%s)\n", yytext); }
-{decimal}                {  printf("DECIMAL(%s)\n", yytext); }
-{identifier}            {  printf("IDENTIFIER(%s)\n", yytext); }
-.                       { printf("Line %d, col %d: illegal character (%s)\n",line, collumn, yytext); }
+{natural}+                {  OUT("NATURAL(%s)\n", yytext); }
+{decimal}                {  OUT("DECIMAL(%s)\n", yytext); }
+{identifier}            {  OUT("IDENTIFIER(%s)\n", yytext); }
+.                       { OUT("Line %d, col %d: illegal character (%s)\n",line, collumn, yytext); }
 %%
 extern int yylex();
 int main(int argc, char *argv[]) {
-    // if (strcmp(argv[1], "-l") == 0) print_tokens = true;
+    if (argc > 1 && strcmp(argv[1], "-l") == 0) print_tokens = true;
     yylex();    /* run the lexical analysis automaton */
     return 0;
 }
