@@ -4,10 +4,12 @@
   char string_buffer[1024];
   bool error = false;
   bool print_tokens = false;
+  bool print_error = false;
   # define YY_USER_ACTION \
     collumn += yyleng;
 
-  #define OUT(fmt, ...) if(print_tokens) printf(fmt "\n", ##__VA_ARGS__)
+  #define OUT(fmt, ...) if(print_tokens) printf(fmt , ##__VA_ARGS__)
+  #define PRINT_ERROR(fmt, ...) if(print_tokens || print_error) printf(fmt , ##__VA_ARGS__)
 %}
 %X COMMENT
 %X STRING
@@ -15,7 +17,7 @@
 digit   ([0-9]([0-9_]*[0-9])?)
 expoent ([eE][+-]?{digit})
 natural 0|[1-9]([0-9_]*[0-9])?
-identifier  [a-zA-Z_][a-zA-Z0-9_]*
+identifier  [a-zA-Z_$][$a-zA-Z0-9_]*
 decimal {digit}*\.{digit}?{expoent}?
 assign "="
 lpar  "("
@@ -63,14 +65,14 @@ reserved "++"|"--"|"null"|"Integer"|"System"
 <COMMENT>.              {}
 <COMMENT>"\n"           { line++; collumn = 1; }
 <COMMENT>"*/"           { BEGIN(0); }
-<COMMENT><<EOF>>        { OUT("Line %d, col %d: unterminated comment\n ", line, collumn); yyterminate(); }
+<COMMENT><<EOF>>        { PRINT_ERROR("Line %d, col %d: unterminated comment\n ", line, collumn); yyterminate(); }
 
 \"                      { BEGIN(STRING); string_buffer[0] = '\0'; }
 <STRING>\"              { BEGIN(0); if(!error) OUT("STRLIT(%s)\n", string_buffer); error = false;}
 <STRING>\\([fnrt\\"])   { strcat(string_buffer, yytext); }
 <STRING>[^\\\n\"]+      { strcat(string_buffer, yytext); }
-<STRING>\\.             { error = true; OUT("Line %d, col %d: invalid escape sequence (%s)\n", line, collumn, yytext); }
-<STRING>\n         { OUT("Line %d, col %d: unterminated string literal\n", line, collumn); BEGIN(0); }
+<STRING>\\.             { error = true; PRINT_ERROR("Line %d, col %d: invalid escape sequence (%s)\n", line, collumn, yytext); }
+<STRING>\n         { PRINT_ERROR("Line %d, col %d: unterminated string literal\n", line, collumn); BEGIN(0); line++; }
 
 {reserved}              { OUT("RESERVED\n"); }
 {assign}                 {  OUT("ASSIGN\n"); }
@@ -121,11 +123,15 @@ reserved "++"|"--"|"null"|"Integer"|"System"
 {natural}+                {  OUT("NATURAL(%s)\n", yytext); }
 {decimal}                {  OUT("DECIMAL(%s)\n", yytext); }
 {identifier}            {  OUT("IDENTIFIER(%s)\n", yytext); }
-.                       { OUT("Line %d, col %d: illegal character (%s)\n",line, collumn, yytext); }
+.                       { PRINT_ERROR("Line %d, col %d: illegal character (%s)\n",line, collumn, yytext); }
 %%
 extern int yylex();
 int main(int argc, char *argv[]) {
-    if (argc > 1 && strcmp(argv[1], "-l") == 0) print_tokens = true;
+    if (argc > 1 && strcmp(argv[1], "-l") == 0){
+      print_tokens = true;
+    } else if(argc >= 1 || strcmp(argv[1], "-e1") == 0) {
+      print_error = true;
+    }
     yylex();    /* run the lexical analysis automaton */
     return 0;
 }
