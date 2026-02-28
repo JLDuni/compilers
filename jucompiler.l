@@ -13,7 +13,6 @@
 %}
 %X COMMENT
 %X STRING
-%X SL_COMMENT
 digit   ([0-9]([0-9_]*[0-9])?)
 expoent ([eE][+-]?{digit})
 natural 0|[1-9]([0-9_]*[0-9])?
@@ -40,6 +39,7 @@ mod "%"
 ne "!="
 not "!"
 or "||"
+and "&&"
 semicollon ";"
 arrow "->"
 lshift "<<"
@@ -51,15 +51,14 @@ print "System.out.print"
 parseint "Integer.parseInt"
 public "public"
 return "return"
-reserved "++"|"--"|"null"|"Integer"|"System"
+reserved "++"|"--"|"null"|"Integer"|"System"|"abstract"|"assert"|"break"|"byte"|"case"|"catch"|"char"|"const"|"continue"|"default"|"do"|"enum"|"extends"|"final"|"finally"|"float"|"for"|"goto"|"implements"|"import"|"instanceof"|"interface"|"long"|"native"|"new"|"package"|"private"|"protected"|"short"|"strictfp"|"super"|"switch"|"synchronized"|"this"|"throw"|"throws"|"transient"|"try"|"volatile"
 
 %%
 \n                      { line++; collumn = 1; }
-[ \t]                   {}
+\r                      {}
+[ \t]+                   {}
 
-"//"                    { BEGIN(SL_COMMENT); }
-<SL_COMMENT>\n          { BEGIN(0); }
-<SL_COMMENT>.           {}
+"//"[^\n]* {}
 
 "/*"                    { BEGIN(COMMENT); }
 <COMMENT>.              {}
@@ -74,7 +73,7 @@ reserved "++"|"--"|"null"|"Integer"|"System"
 <STRING>\\.             { error = true; PRINT_ERROR("Line %d, col %d: invalid escape sequence (%s)\n", line, collumn, yytext); }
 <STRING>\n         { PRINT_ERROR("Line %d, col %d: unterminated string literal\n", line, collumn); BEGIN(0); line++; }
 
-{reserved}              { OUT("RESERVED\n"); }
+{reserved}              { OUT("RESERVED(%s)\n", yytext); }
 {assign}                 {  OUT("ASSIGN\n"); }
 {lpar}                  {  OUT("LPAR\n"); }
 {rpar}                  {  OUT("RPAR\n"); }
@@ -96,6 +95,7 @@ reserved "++"|"--"|"null"|"Integer"|"System"
 {ne}                    { OUT("NE\n"); }
 {not}                   { OUT("NOT\n"); }
 {or}                   { OUT("OR\n"); }
+{and}                   { OUT("AND\n"); }
 {semicollon}                   { OUT("SEMICOLLON\n"); }
 {arrow}                   { OUT("ARROW\n"); }
 {rshift}                   { OUT("RSHIFT\n"); }
