@@ -13,6 +13,7 @@
 %}
 %X COMMENT
 %X STRING
+%X SL_COMMENT
 digit   ([0-9]([0-9_]*[0-9])?)
 expoent ([eE][+-]?{digit})
 natural 0|[1-9]([0-9_]*[0-9])?
@@ -58,12 +59,15 @@ reserved "++"|"--"|"null"|"Integer"|"System"|"abstract"|"assert"|"break"|"byte"|
 \r                      {}
 [ \t]+                   {}
 
-"//"[^\n]* {}
+"//"                    { BEGIN(SL_COMMENT); }
+<SL_COMMENT>.           {}
+<SL_COMMENT>\n          { line++; BEGIN(0); }
+
 
 "/*"                    { BEGIN(COMMENT); }
-<COMMENT>.              {}
-<COMMENT>"\n"           { line++; collumn = 1; }
 <COMMENT>"*/"           { BEGIN(0); }
+<COMMENT>\n             { line++; collumn = 1; }
+<COMMENT>.              {}
 <COMMENT><<EOF>>        { PRINT_ERROR("Line %d, col %d: unterminated comment\n ", line, collumn); yyterminate(); }
 
 \"                      { BEGIN(STRING); string_buffer[0] = '\0'; }
