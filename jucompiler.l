@@ -5,6 +5,8 @@
   bool error = false;
   bool print_tokens = false;
   bool print_error = false;
+  int start_comment_line = 0;
+  int start_comment_column = 0;
   # define YY_USER_ACTION \
     collumn += yyleng;
 
@@ -64,11 +66,11 @@ reserved "++"|"--"|"null"|"Integer"|"System"|"abstract"|"assert"|"break"|"byte"|
 <SL_COMMENT>\n          { line++; BEGIN(0); }
 
 
-"/*"                    { BEGIN(COMMENT); }
+"/*"                    { BEGIN(COMMENT); start_comment_line = line; start_comment_column = collumn; }
 <COMMENT>"*/"           { BEGIN(0); }
 <COMMENT>\n             { line++; collumn = 1; }
 <COMMENT>.              {}
-<COMMENT><<EOF>>        { PRINT_ERROR("Line %d, col %d: unterminated comment\n ", line, collumn); yyterminate(); }
+<COMMENT><<EOF>>        { PRINT_ERROR("Line %d, col %d: unterminated comment\n ", start_comment_line, start_comment_column); yyterminate(); }
 
 \"                      { BEGIN(STRING); string_buffer[0] = '\0'; }
 <STRING>\"              { BEGIN(0); if(!error) OUT("STRLIT(%s)\n", string_buffer); error = false;}
@@ -124,7 +126,7 @@ reserved "++"|"--"|"null"|"Integer"|"System"|"abstract"|"assert"|"break"|"byte"|
 "void"                  { OUT("VOID\n"); }
 "while"                 { OUT("WHILE\n"); }
 
-{natural}+                {  OUT("NATURAL(%s)\n", yytext); }
+{natural}                {  OUT("NATURAL(%s)\n", yytext); }
 {decimal}                {  OUT("DECIMAL(%s)\n", yytext); }
 {identifier}            {  OUT("IDENTIFIER(%s)\n", yytext); }
 .                       { PRINT_ERROR("Line %d, col %d: illegal character (%s)\n",line, collumn, yytext); }
