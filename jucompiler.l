@@ -7,11 +7,12 @@
   bool print_error = false;
   int start_comment_line = 0;
   int start_comment_column = 0;
+  #define OUT(fmt, ...) if(print_tokens) printf(fmt , ##__VA_ARGS__)
+  #define PRINT_ERROR(fmt, ...) if(print_tokens || print_error) printf(fmt , ##__VA_ARGS__)
+
   # define YY_USER_ACTION \
     collumn += yyleng;
 
-  #define OUT(fmt, ...) if(print_tokens) printf(fmt , ##__VA_ARGS__)
-  #define PRINT_ERROR(fmt, ...) if(print_tokens || print_error) printf(fmt , ##__VA_ARGS__)
 %}
 %X COMMENT
 %X STRING
@@ -66,17 +67,17 @@ reserved "++"|"--"|"null"|"Integer"|"System"|"abstract"|"assert"|"break"|"byte"|
 <SL_COMMENT>\n          { line++; BEGIN(0); }
 
 
-"/*"                    { BEGIN(COMMENT); start_comment_line = line; start_comment_column = collumn; }
+"/*"                    { start_comment_column = collumn; start_comment_line = line; BEGIN(COMMENT); }
 <COMMENT>"*/"           { BEGIN(0); }
 <COMMENT>\n             { line++; collumn = 1; }
 <COMMENT>.              {}
-<COMMENT><<EOF>>        { PRINT_ERROR("Line %d, col %d: unterminated comment\n ", start_comment_line, start_comment_column); yyterminate(); }
+<COMMENT><<EOF>>        { PRINT_ERROR("Line %d, col %d: unterminated comment\n", start_comment_line, start_comment_column); yyterminate(); }
 
 \"                      { BEGIN(STRING); string_buffer[0] = '\0'; }
 <STRING>\"              { BEGIN(0); if(!error) OUT("STRLIT(%s)\n", string_buffer); error = false;}
 <STRING>\\([fnrt\\"])   { strcat(string_buffer, yytext); }
 <STRING>[^\\\n\"]+      { strcat(string_buffer, yytext); }
-<STRING>\\.             { error = true; PRINT_ERROR("Line %d, col %d: invalid escape sequence (%s)\n", line, collumn, yytext); }
+<STRING>\\.             { error = true; PRINT_ERROR("Line %d, col %d: invalid escape sequence (%s)\n", line, collumn - 2, yytext); }
 <STRING>\n         { PRINT_ERROR("Line %d, col %d: unterminated string literal\n", line, collumn); BEGIN(0); line++; }
 
 {reserved}              { OUT("RESERVED(%s)\n", yytext); }
@@ -129,7 +130,7 @@ reserved "++"|"--"|"null"|"Integer"|"System"|"abstract"|"assert"|"break"|"byte"|
 {natural}                {  OUT("NATURAL(%s)\n", yytext); }
 {decimal}                {  OUT("DECIMAL(%s)\n", yytext); }
 {identifier}            {  OUT("IDENTIFIER(%s)\n", yytext); }
-.                       { PRINT_ERROR("Line %d, col %d: illegal character (%s)\n",line, collumn, yytext); }
+.                       { PRINT_ERROR("Line %d, col %d: illegal character (%s)\n",line, collumn, yytext); 
 %%
 extern int yylex();
 int main(int argc, char *argv[]) {
