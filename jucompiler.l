@@ -5,8 +5,12 @@
   bool error = false;
   bool print_tokens = false;
   bool print_error = false;
+
   int start_comment_line = 0;
   int start_comment_column = 0;
+
+  int start_string_line = 0;
+  int start_string_column = 0;
   #define OUT(fmt, ...) if(print_tokens) printf(fmt , ##__VA_ARGS__)
   #define PRINT_ERROR(fmt, ...) if(print_tokens || print_error) printf(fmt , ##__VA_ARGS__)
 
@@ -60,25 +64,26 @@ reserved "++"|"--"|"null"|"Integer"|"System"|"abstract"|"assert"|"break"|"byte"|
 %%
 \n                      { line++; collumn = 1; }
 \r                      {}
-[ \t]+                   {}
+[ \t\f]+                   {}
 
 "//"                    { BEGIN(SL_COMMENT); }
 <SL_COMMENT>.           {}
-<SL_COMMENT>\n          { line++; BEGIN(0); }
+<SL_COMMENT>\n          { line++; collumn = 1; BEGIN(0); }
 
 
-"/*"                    { start_comment_column = collumn; start_comment_line = line; BEGIN(COMMENT); }
+"/*"                    { start_comment_column = collumn - yyleng; start_comment_line = line; BEGIN(COMMENT); }
 <COMMENT>"*/"           { BEGIN(0); }
 <COMMENT>\n             { line++; collumn = 1; }
 <COMMENT>.              {}
 <COMMENT><<EOF>>        { PRINT_ERROR("Line %d, col %d: unterminated comment\n", start_comment_line, start_comment_column); yyterminate(); }
 
-\"                      { BEGIN(STRING); string_buffer[0] = '\0'; }
-<STRING>\"              { BEGIN(0); if(!error) OUT("STRLIT(%s)\n", string_buffer); error = false;}
+\"                      { BEGIN(STRING); string_buffer[0] = '\0';  start_string_line = line; start_string_column = collumn - yyleng; error = false; }
+<STRING>\"              { BEGIN(0); if(!error) OUT("STRLIT(\"%s\")\n", string_buffer); }
 <STRING>\\([fnrt\\"])   { strcat(string_buffer, yytext); }
 <STRING>[^\\\n\"]+      { strcat(string_buffer, yytext); }
-<STRING>\\.             { error = true; PRINT_ERROR("Line %d, col %d: invalid escape sequence (%s)\n", line, collumn - 2, yytext); }
-<STRING>\n         { PRINT_ERROR("Line %d, col %d: unterminated string literal\n", line, collumn); BEGIN(0); line++; }
+<STRING>\\.             { error = true; PRINT_ERROR("Line %d, col %d: invalid escape sequence (%s)\n", line, collumn - yyleng, yytext); }
+<STRING>\\             { error = true; PRINT_ERROR("Line %d, col %d: invalid escape sequence (%s)\n", line, collumn - yyleng, yytext); }
+<STRING>(\r\n|\n)         { PRINT_ERROR("Line %d, col %d: unterminated string literal\n", start_string_line, start_string_column); BEGIN(0); line++; collumn = 1; }
 
 {reserved}              { OUT("RESERVED(%s)\n", yytext); }
 {assign}                 {  OUT("ASSIGN\n"); }
@@ -103,7 +108,7 @@ reserved "++"|"--"|"null"|"Integer"|"System"|"abstract"|"assert"|"break"|"byte"|
 {not}                   { OUT("NOT\n"); }
 {or}                   { OUT("OR\n"); }
 {and}                   { OUT("AND\n"); }
-{semicollon}                   { OUT("SEMICOLLON\n"); }
+{semicollon}                   { OUT("SEMICOLON\n"); }
 {arrow}                   { OUT("ARROW\n"); }
 {rshift}                   { OUT("RSHIFT\n"); }
 {lshift}                   { OUT("LSHIFT\n"); }
@@ -130,7 +135,7 @@ reserved "++"|"--"|"null"|"Integer"|"System"|"abstract"|"assert"|"break"|"byte"|
 {natural}                {  OUT("NATURAL(%s)\n", yytext); }
 {decimal}                {  OUT("DECIMAL(%s)\n", yytext); }
 {identifier}            {  OUT("IDENTIFIER(%s)\n", yytext); }
-.                       { PRINT_ERROR("Line %d, col %d: illegal character (%s)\n",line, collumn, yytext); 
+.                       { PRINT_ERROR("Line %d, col %d: illegal character (%s)\n",line, collumn - yyleng, yytext); } 
 %%
 extern int yylex();
 int main(int argc, char *argv[]) {
