@@ -1,3 +1,4 @@
+%option 8bit
 %{
   int collumn = 1;
   int line = 1;
@@ -25,7 +26,7 @@ digit   ([0-9]([0-9_]*[0-9])?)
 expoent ([eE][+-]?{digit})
 natural 0|[1-9]([0-9_]*[0-9])?
 identifier  [a-zA-Z_$][$a-zA-Z0-9_]*
-decimal {digit}*\.{digit}?{expoent}?
+decimal ({digit}\.{digit}?{expoent}?)|(\.{digit}{expoent}?)|({digit}{expoent})
 assign "="
 lpar  "("
 rpar  ")"
@@ -60,10 +61,11 @@ parseint "Integer.parseInt"
 public "public"
 return "return"
 reserved "++"|"--"|"null"|"Integer"|"System"|"abstract"|"assert"|"break"|"byte"|"case"|"catch"|"char"|"const"|"continue"|"default"|"do"|"enum"|"extends"|"final"|"finally"|"float"|"for"|"goto"|"implements"|"import"|"instanceof"|"interface"|"long"|"native"|"new"|"package"|"private"|"protected"|"short"|"strictfp"|"super"|"switch"|"synchronized"|"this"|"throw"|"throws"|"transient"|"try"|"volatile"
+boollit "true"|"false"
+lineTerminator (\n|\r|\r\n)
 
 %%
-\n                      { line++; collumn = 1; }
-\r                      {}
+(\r\n|\n)      { line++; collumn = 1; }
 [ \t\f]+                   {}
 
 "//"                    { BEGIN(SL_COMMENT); }
@@ -73,24 +75,26 @@ reserved "++"|"--"|"null"|"Integer"|"System"|"abstract"|"assert"|"break"|"byte"|
 
 "/*"                    { start_comment_column = collumn - yyleng; start_comment_line = line; BEGIN(COMMENT); }
 <COMMENT>"*/"           { BEGIN(0); }
-<COMMENT>\n             { line++; collumn = 1; }
+<COMMENT>(\r\n|\n)             { line++; collumn = 1; }
 <COMMENT>.              {}
 <COMMENT><<EOF>>        { PRINT_ERROR("Line %d, col %d: unterminated comment\n", start_comment_line, start_comment_column); yyterminate(); }
 
 \"                      { BEGIN(STRING); string_buffer[0] = '\0';  start_string_line = line; start_string_column = collumn - yyleng; error = false; }
 <STRING>\"              { BEGIN(0); if(!error) OUT("STRLIT(\"%s\")\n", string_buffer); }
 <STRING>\\([fnrt\\"])   { strcat(string_buffer, yytext); }
-<STRING>[^\\\n\"]+      { strcat(string_buffer, yytext); }
-<STRING>\\.             { error = true; PRINT_ERROR("Line %d, col %d: invalid escape sequence (%s)\n", line, collumn - yyleng, yytext); }
+<STRING>[^\\\n\r\"]+      { strcat(string_buffer, yytext); }
+<STRING>\\[^\n\r]             { error = true; PRINT_ERROR("Line %d, col %d: invalid escape sequence (%s)\n", line, collumn - yyleng, yytext); }
 <STRING>\\             { error = true; PRINT_ERROR("Line %d, col %d: invalid escape sequence (%s)\n", line, collumn - yyleng, yytext); }
 <STRING>(\r\n|\n)         { PRINT_ERROR("Line %d, col %d: unterminated string literal\n", start_string_line, start_string_column); BEGIN(0); line++; collumn = 1; }
+<STRING><<EOF>>         { PRINT_ERROR("Line %d, col %d: unterminated string literal\n", start_string_line, start_string_column); yyterminate(); }
 
+{boollit}               { OUT("BOOLLIT(%s)\n", yytext); }
 {reserved}              { OUT("RESERVED(%s)\n", yytext); }
 {assign}                 {  OUT("ASSIGN\n"); }
 {lpar}                  {  OUT("LPAR\n"); }
 {rpar}                  {  OUT("RPAR\n"); }
 {star}                  {  OUT("STAR\n"); }
-{divide}                {  OUT("DIVIDE\n"); }
+{divide}                {  OUT("DIV\n"); }
 {plus}                  {  OUT("PLUS\n"); }
 {minus}                 {  OUT("MINUS\n"); }
 {comma}                 { OUT("COMMA\n"); }
