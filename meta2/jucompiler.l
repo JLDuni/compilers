@@ -1,4 +1,8 @@
 %{
+  #include <string.h>
+  #include "y.tab.h"  
+  #include "ast.h"
+
   int collumn = 1;
   int line = 1;
   char string_buffer[1024];
@@ -20,7 +24,24 @@ int syn_line = -1, syn_column = -1;
 int errors = 0;
 
 extern struct node *ast;
-  #define OUT(fmt, ...) if(print_tokens) printf(fmt , ##__VA_ARGS__)
+
+  #define OUT(fmt) do { \
+    if(print_tokens) printf(#fmt"\n"); \
+    return fmt; \
+  } while(0);
+
+  #define OUT_VALUE(fmt, value) do { \
+    if(print_tokens) printf(#fmt "(%s)\n", value); \
+    yylval.lexeme = strdup(value); \
+    return fmt; \
+  } while(0); 
+
+  #define OUT_STR_VALUE(fmt, value) do { \
+    if(print_tokens) printf(#fmt "(\"%s\")", value); \
+    yylval.lexeme = strdup(value); \
+    return fmt; \
+  } while(0); 
+
   #define PRINT_ERROR(fmt, ...) if(print_tokens || print_error) printf(fmt , ##__VA_ARGS__)
   #define PASS_TOKEN() yylval.lexeme = strdup(yytext);
 
@@ -29,7 +50,7 @@ extern struct node *ast;
 
 %}
 %X COMMENT
-%X STRING
+%X STRING_STATE
 %X SL_COMMENT
 digit   ([0-9]([0-9_]*[0-9])?)
 expoent ([eE][+-]?{digit})
@@ -88,63 +109,63 @@ reserved "++"|"--"|"null"|"Integer"|"System"|"abstract"|"assert"|"break"|"byte"|
 <COMMENT><<EOF>>        { PRINT_ERROR("Line %d, col %d: unterminated comment\n", start_comment_line, start_comment_column); yyterminate(); }
 
 \"                      { BEGIN(STRING); string_buffer[0] = '\0';  start_string_line = line; start_string_column = collumn - yyleng; error = false; }
-<STRING>\"              { BEGIN(0); if(!error) OUT("STRLIT(\"%s\")\n", string_buffer); }
-<STRING>\\([fnrt\\"])   { strcat(string_buffer, yytext); }
-<STRING>[^\\\n\"]+      { strcat(string_buffer, yytext); }
-<STRING>\\.             { error = true; PRINT_ERROR("Line %d, col %d: invalid escape sequence (%s)\n", line, collumn - yyleng, yytext); }
-<STRING>\\             { error = true; PRINT_ERROR("Line %d, col %d: invalid escape sequence (%s)\n", line, collumn - yyleng, yytext); }
-<STRING>(\r\n|\n)         { PRINT_ERROR("Line %d, col %d: unterminated string literal\n", start_string_line, start_string_column); BEGIN(0); line++; collumn = 1; }
+<STRING_STATE>\"              { BEGIN(0); if(!error) OUT_STR_VALUE(STRLIT, string_buffer); }
+<STRING_STATE>\\([fnrt\\"])   { strcat(string_buffer, yytext); }
+<STRING_STATE>[^\\\n\"]+      { strcat(string_buffer, yytext); }
+<STRING_STATE>\\.             { error = true; PRINT_ERROR("Line %d, col %d: invalid escape sequence (%s)\n", line, collumn - yyleng, yytext); }
+<STRING_STATE>\\             { error = true; PRINT_ERROR("Line %d, col %d: invalid escape sequence (%s)\n", line, collumn - yyleng, yytext); }
+<STRING_STATE>(\r\n|\n)         { PRINT_ERROR("Line %d, col %d: unterminated string literal\n", start_string_line, start_string_column); BEGIN(0); line++; collumn = 1; }
 
-{reserved}              { OUT("RESERVED(%s)\n", yytext); }
-{assign}                 {  OUT("ASSIGN\n"); }
-{lpar}                  {  OUT("LPAR\n"); }
-{rpar}                  {  OUT("RPAR\n"); }
-{star}                  {  OUT("STAR\n"); }
-{divide}                {  OUT("DIVIDE\n"); }
-{plus}                  {  OUT("PLUS\n"); }
-{minus}                 {  OUT("MINUS\n"); }
-{comma}                 { OUT("COMMA\n"); }
-{equal}                 { OUT("EQ\n"); }
-{ge}                    { OUT("GE\n"); }
-{gt}                    { OUT("GT\n"); }
-{lbrace}                { OUT("LBRACE\n"); }
-{rbrace}                { OUT("RBRACE\n"); }
-{le}                    { OUT("LE\n"); }
-{lsq}                    { OUT("LSQ\n"); }
-{rsq}                    { OUT("RSQ\n"); }
-{lt}                    { OUT("LT\n"); }
-{mod}                    { OUT("MOD\n"); }
-{ne}                    { OUT("NE\n"); }
-{not}                   { OUT("NOT\n"); }
-{or}                   { OUT("OR\n"); }
-{and}                   { OUT("AND\n"); }
-{semicollon}                   { OUT("SEMICOLON\n"); }
-{arrow}                   { OUT("ARROW\n"); }
-{rshift}                   { OUT("RSHIFT\n"); }
-{lshift}                   { OUT("LSHIFT\n"); }
-{xor}                   { OUT("XOR\n"); }
-{class}                   { OUT("CLASS\n"); }
-".length"                 { OUT("DOTLENGTH\n"); }
-{print}                   { OUT("PRINT\n"); }
-{parseint}                   { OUT("PARSEINT\n"); }
-{public}                   { OUT("PUBLIC\n"); }
+{reserved}              { OUT_VALUE(RESERVED, yytext); }
+{assign}                 {  OUT(ASSIGN); }
+{lpar}                  {  OUT(LPAR); }
+{rpar}                  {  OUT(RPAR); }
+{star}                  {  OUT(STAR); }
+{divide}                {  OUT(DIVIDE); }
+{plus}                  {  OUT(PLUS); }
+{minus}                 {  OUT(MINUS); }
+{comma}                 { OUT(COMMA); }
+{equal}                 { OUT(EQ); }
+{ge}                    { OUT(GE); }
+{gt}                    { OUT(GT); }
+{lbrace}                { OUT(LBRACE); }
+{rbrace}                { OUT(RBRACE); }
+{le}                    { OUT(LE); }
+{lsq}                    { OUT(LSQ); }
+{rsq}                    { OUT(RSQ); }
+{lt}                    { OUT(LT); }
+{mod}                    { OUT(MOD); }
+{ne}                    { OUT(NE); }
+{not}                   { OUT(NOT); }
+{or}                   { OUT(OR); }
+{and}                   { OUT(AND); }
+{semicollon}                   { OUT(SEMICOLON); }
+{arrow}                   { OUT(ARROW); }
+{rshift}                   { OUT(RSHIFT); }
+{lshift}                   { OUT(LSHIFT); }
+{xor}                   { OUT(XOR); }
+{class}                   { OUT(CLASS); }
+".length"                 { OUT(DOTLENGTH); }
+{print}                   { OUT(PRINT); }
+{parseint}                   { OUT(PARSEINT); }
+{public}                   { OUT(PUBLIC); }
 
 
-"int"               {  OUT("INT\n"); }
-{bool}                   { OUT("BOOL\n"); }
-"double"                {  OUT("DOUBLE\n"); }
-"if"                    {  OUT("IF\n"); }
-"then"                  {  OUT("THEN\n"); }
-"else"                  {  OUT("ELSE\n"); }
-{return}                { OUT("RETURN\n"); }
-"static"                { OUT("STATIC\n"); }
-"String"                { OUT("STRING\n"); }
-"void"                  { OUT("VOID\n"); }
-"while"                 { OUT("WHILE\n"); }
+"int"               {  OUT(INT); }
+{bool}                   { OUT(BOOL); }
+"double"                {  OUT(DOUBLE); }
+"if"                    {  OUT(IF); }
+"then"                  {  OUT(THEN); }
+"else"                  {  OUT(ELSE); }
+{return}                { OUT(RETURN); }
+"static"                { OUT(STATIC); }
+"String"                { OUT(STRING); }
+"void"                  { OUT(VOID); }
+"while"                 { OUT(WHILE); }
 
-{natural}                {  OUT("NATURAL(%s)\n", yytext); }
-{decimal}                {  OUT("DECIMAL(%s)\n", yytext); }
-{identifier}            {  OUT("IDENTIFIER(%s)\n", yytext); }
+{natural}                {  OUT_VALUE(NATURAL, yytext); }
+{decimal}                {  OUT_VALUE(DECIMAL, yytext); }
+{identifier}            {  OUT_VALUE(IDENTIFIER, yytext); }
 .                       { PRINT_ERROR("Line %d, col %d: illegal character (%s)\n",line, collumn - yyleng, yytext); } 
 %%
 extern int yylex();
@@ -155,6 +176,7 @@ int main(int argc, char *argv[]) {
       print_error = true;
     }
     yylex();    /* run the lexical analysis automaton */
+    yyparse();
     return 0;
 }
 int yywrap() {  /* called on EOF, return 1 to terminate */

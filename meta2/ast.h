@@ -1,27 +1,62 @@
 #ifndef _AST_H
 #define _AST_H
+#include <string.h>
 
-enum category {
-  Program,
-  Function,
-  Parameters,
-  Parameter,
-  Arguments,
-  Integer,
-  Double,
-  Identifier,
-  Natural,
-  Decimal,
-  Call,
-  If,
-  Add,
-  Sub,
-  Mul,
-  Div
-};
+typedef enum {
+    Program,            
+
+    FieldDecl,          
+    VarDecl,            
+    MethodDecl,         
+    MethodHeader,       
+    MethodParams,       
+    ParamDecl,          
+    MethodBody,         
+
+    Block,              
+    If,                 
+    While,              
+    Return,             
+    Print,              
+
+    Assign,             
+    Or,                 
+    And,                
+    Eq,                 
+    Ne,                 
+    Lt,                 
+    Gt,                 
+    Le,                 
+    Ge,                 
+    Add,                
+    Sub,                
+    Mul,                
+    Div,                
+    Mod,                
+    Lshift,             
+    Rshift,             
+    Xor,                
+    Not,                
+    Minus,              
+    Plus,               
+    Length,             
+    Call,               
+    ParseArgs,          
+
+    Bool,               
+    BoolLit,            
+    Double,             
+    Decimal,            
+    Identifier,         
+    Int,                
+    Natural,            
+    StrLit,             
+    StringArray,        
+    Void                
+} category;
 
 struct node {
-  enum category category;
+  category category;
   char *token;
   struct node_list *children;
 };
@@ -31,7 +66,7 @@ struct node_list {
   struct node_list *next;
 };
 
-struct node *newnode(enum category category, char *token);
+struct node *newnode(category category, char *token);
 void addchild(struct node *parent, struct node *child);
 void show(struct node *node, int depth);
 struct node_list *newlist(struct node *n);

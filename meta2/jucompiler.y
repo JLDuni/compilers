@@ -12,8 +12,11 @@ struct node *ast;
 
 %}
 
-%token INTEGER DOUBLE IF THEN ELSE
-%token<lexeme> IDENTIFIER NATURAL DECIMAL
+%token <lexeme> IDENTIFIER NATURAL DECIMAL STRLIT RESERVED
+%token BOOL CLASS DOUBLE ELSE IF INT PRINT PARSEINT PUBLIC RETURN STATIC STRING VOID WHILE THEN INTEGER
+%token AND ASSIGN ARROW COMMA DIVIDE DOTLENGTH EQ GE GT LBRACE LPAR LSQ LE LSHIFT LT 
+%token MINUS MOD NE NOT OR PLUS RBRACE RPAR RSQ RSHIFT SEMICOLON STAR XOR
+
 %type<node> program function parameters parameter arguments expression
 %type<list> functions
 
@@ -31,9 +34,14 @@ struct node *ast;
 
 %%
 
-program: functions                   { ast = $$ = newnode(Program, NULL);
-                                      addchildren($$, $1); }
+program: CLASS IDENTIFIER LBRACE declarations RBRACE                { ast = $$ = newnode(Program, NULL);
+                                                                    addchildren($$, $1); }
     ;
+
+declarations: declarations MethodDecl 
+            | declarations FieldDecl
+            | declarations SEMICOLON
+            ;
 
 functions: function                 { $$ = newlist($1); }
          | functions function       { $$ = append($1, $2); }

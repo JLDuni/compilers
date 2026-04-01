@@ -8,11 +8,15 @@ const char *node_names[] = {"Program",   "Function", "Parameters", "Parameter",
                             "Add",       "Sub",      "Mul",        "Div"};
 
 // create a node of a given category with a given lexical symbol
-struct node *newnode(enum category category, char *token) {
+struct node *newnode(category category, char *token) {
   struct node *new = malloc(sizeof(struct node));
+  if (new == NULL) return new;
+
   new->category = category;
   new->token = token;
   new->children = malloc(sizeof(struct node_list));
+  if (new->children == NULL) return new;
+
   new->children->node = NULL;
   new->children->next = NULL;
   return new;
@@ -21,6 +25,7 @@ struct node *newnode(enum category category, char *token) {
 // append a node to the list of children of the parent node
 void addchild(struct node *parent, struct node *child) {
   struct node_list *new = malloc(sizeof(struct node_list));
+  if(new == NULL) return;
   new->node = child;
   new->next = NULL;
   struct node_list *children = parent->children;
@@ -55,6 +60,7 @@ void show(struct node *node, int depth) {
 
 struct node_list *newlist(struct node *n) {
   struct node_list *newlist = malloc(sizeof(struct node_list));
+  if(newlist == NULL) return newlist;
   newlist->node = n;
   newlist->next = NULL;
   return newlist;
@@ -77,4 +83,12 @@ void addchildren(struct node *parent, struct node_list *list) {
   if (parent != NULL) {
     parent->children = list;
   }
+}
+
+void yyerror(const char *s) {
+     /* Using your existing line and collumn variables */
+     extern int line, collumn;
+     extern char *yytext;
+     
+     printf("Line %d, col %d: %s: %s\n", line, (int)(collumn - strlen(yytext)), s, yytext);
 }
