@@ -3,6 +3,8 @@
   #include "y.tab.h"  
   #include "ast.h"
 
+  int lex_only = 0;
+  int show_ast = 0;
   int collumn = 1;
   int line = 1;
   char string_buffer[1024];
@@ -91,6 +93,7 @@ parseint "Integer.parseInt"
 public "public"
 return "return"
 reserved "++"|"--"|"null"|"Integer"|"System"|"abstract"|"assert"|"break"|"byte"|"case"|"catch"|"char"|"const"|"continue"|"default"|"do"|"enum"|"extends"|"final"|"finally"|"float"|"for"|"goto"|"implements"|"import"|"instanceof"|"interface"|"long"|"native"|"new"|"package"|"private"|"protected"|"short"|"strictfp"|"super"|"switch"|"synchronized"|"this"|"throw"|"throws"|"transient"|"try"|"volatile"
+boolit "true|false"
 
 %%
 \n                      { line++; collumn = 1; }
@@ -108,7 +111,7 @@ reserved "++"|"--"|"null"|"Integer"|"System"|"abstract"|"assert"|"break"|"byte"|
 <COMMENT>.              {}
 <COMMENT><<EOF>>        { PRINT_ERROR("Line %d, col %d: unterminated comment\n", start_comment_line, start_comment_column); yyterminate(); }
 
-\"                      { BEGIN(STRING); string_buffer[0] = '\0';  start_string_line = line; start_string_column = collumn - yyleng; error = false; }
+\"                      { BEGIN(STRING_STATE); string_buffer[0] = '\0';  start_string_line = line; start_string_column = collumn - yyleng; error = false; }
 <STRING_STATE>\"              { BEGIN(0); if(!error) OUT_STR_VALUE(STRLIT, string_buffer); }
 <STRING_STATE>\\([fnrt\\"])   { strcat(string_buffer, yytext); }
 <STRING_STATE>[^\\\n\"]+      { strcat(string_buffer, yytext); }
@@ -149,6 +152,7 @@ reserved "++"|"--"|"null"|"Integer"|"System"|"abstract"|"assert"|"break"|"byte"|
 {print}                   { OUT(PRINT); }
 {parseint}                   { OUT(PARSEINT); }
 {public}                   { OUT(PUBLIC); }
+{boolit}                    { OUT_VALUE(BOOLLIT, yytext); }
 
 
 "int"               {  OUT(INT); }
@@ -170,14 +174,29 @@ reserved "++"|"--"|"null"|"Integer"|"System"|"abstract"|"assert"|"break"|"byte"|
 %%
 extern int yylex();
 int main(int argc, char *argv[]) {
-    if (argc > 1 && strcmp(argv[1], "-l") == 0){
-      print_tokens = true;
-    } else if(argc >= 1 || strcmp(argv[1], "-e1") == 0) {
-      print_error = true;
+  if (argc > 1) {
+    if (strcmp(argv[1], "-l") == 0) {
+      print_tokens = 1;
+      lex_only = 1;
+    } else if (strcmp(argv[1], "-e1") == 0) {
+        lex_only = 1;
+        print_tokens = 0;
+        print_error = 1;
+    } else if (strcmp(argv[1], "-t") == 0) {
+        show_ast = 1;
+    } else if (strcmp(argv[1], "-e2") == 0) {
+        show_ast = 0; 
+      }
     }
-    yylex();    /* run the lexical analysis automaton */
-    yyparse();
-    return 0;
+
+    if (lex_only) {
+      while(yylex() != 0);
+    } else {
+        if (yyparse() == 0 && show_ast) {
+            show(ast, 0); 
+      }
+    }
+  return 0;
 }
 int yywrap() {  /* called on EOF, return 1 to terminate */
     return 1;

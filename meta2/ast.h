@@ -44,7 +44,7 @@ typedef enum {
     ParseArgs,          
 
     Bool,               
-    BoolLit,            
+    Boollit,            
     Double,             
     Decimal,            
     Identifier,         
@@ -72,5 +72,9 @@ void show(struct node *node, int depth);
 struct node_list *newlist(struct node *n);
 struct node_list *append(struct node_list *list, struct node *n);
 void addchildren(struct node *parent, struct node_list *list);
+struct node *copy_node(struct node *n);
+int count_list(struct node_list *list);
+
+struct node_list *copy_list(struct node_list *list);
 
 #endif

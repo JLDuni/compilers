@@ -1,11 +1,13 @@
 CC = gcc
 LEX = flex
 YACC = bison
-YFLAGS = -d -y
+YFLAGS = -d -y -Wcounterexamples
 CFLAGS = -Wall -Wno-unused-function -g
 
 TARGET = jucompiler
 OBJS = y.tab.o lex.yy.o ast.o
+
+SCRIPT = ../comp/test.sh
 
 all: $(TARGET)
 
@@ -23,5 +25,8 @@ ast.o: ast.c ast.h
 
 clean:
 	rm -f $(TARGET) y.tab.c y.tab.h lex.yy.c *.o
+test: all
+	./$(SCRIPT) ./$(TARGET)
+
 
 .PHONY: all clean

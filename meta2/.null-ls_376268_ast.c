@@ -2,54 +2,10 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-const char *node_names[] = {
-    "Program", 
-    "FieldDecl", 
-    "VarDecl", 
-    "MethodDecl", 
-    "MethodHeader", 
-    "MethodParams", 
-    "ParamDecl", 
-    "MethodBody", 
-    "Block", 
-    "If", 
-    "While", 
-    "Return", 
-    "Print", 
-    "Assign", 
-    "Or", 
-    "And", 
-    "Eq", 
-    "Ne", 
-    "Lt", 
-    "Gt", 
-    "Le", 
-    "Ge", 
-    "Add", 
-    "Sub", 
-    "Mul", 
-    "Div", 
-    "Mod", 
-    "Lshift", 
-    "Rshift", 
-    "Xor", 
-    "Not", 
-    "Minus", 
-    "Plus", 
-    "Length", 
-    "Call", 
-    "ParseArgs", 
-    "Bool", 
-    "Boollit", 
-    "Double", 
-    "Decimal", 
-    "Identifier", 
-    "Int", 
-    "Natural", 
-    "StrLit", 
-    "StringArray", 
-    "Void"
-};
+const char *node_names[] = {"Program",   "Function", "Parameters", "Parameter",
+                            "Arguments", "Integer",  "Double",     "Identifier",
+                            "Natural",   "Decimal",  "Call",       "If",
+                            "Add",       "Sub",      "Mul",        "Div"};
 
 // create a node of a given category with a given lexical symbol
 struct node *newnode(category category, char *token) {
@@ -87,7 +43,7 @@ void show(struct node *node, int depth) {
   }
 
   for (int i = 0; i < depth; i++) {
-    printf("..");
+    printf("__");
   }
 
   printf("%s", node_names[node->category]);
@@ -121,7 +77,6 @@ struct node_list *append(struct node_list *list, struct node *n) {
 
   struct node_list *current_node = list;
   while (current_node->next != NULL) {
-    if(current_node->node == n) return list;
     current_node = current_node->next;
   }
   current_node->next = newlist(n);
