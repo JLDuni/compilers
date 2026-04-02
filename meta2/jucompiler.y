@@ -18,6 +18,7 @@ struct node *ast;
 %token MINUS MOD NE NOT OR PLUS RBRACE RPAR RSQ RSHIFT SEMICOLON STAR XOR
 
 %type<node> program function parameters parameter arguments expression MethodDecl MethodHeader
+%type<node_list> VarDecl MultipleIdentifiers StatementList
 %type<list> functions
 
 %left LOW
@@ -66,7 +67,40 @@ MethodHeader: Type IDENTIFIER LPAR OptionalFormalParams RPAR { $$ = newnode(Meth
                                                                addchildren($$, list); }
             ;
 
-MethodBody: 
+MethodBody: LBRACE BodyContent RBRACE     { $$ = newnode(MethodBody, NULL); 
+                                            addchildren($$, $2); }
+          ;
+
+BodyContent:                          { $$ = NULL; }
+           | BodyContent VarDecl      { $$ = append($1, $2); }
+           | BodyContent Statement    { if($2 == NULL) $$ = append($1, $2); 
+                                        else $$ = $1; }
+           ;
+
+VarDecl: Type IDENTIFIER MultipleIdentifiers SEMMICOLLON    { struct node *decl(VarDecl, NULL); 
+                                                              addchild(decl, $1); 
+                                                              addchild(decl, newnode(Identifier, $2)); 
+                                                              struct node_list *list = newlist(decl); 
+                                                              
+                                                              struct node_list *curr = $3;
+                                                              while(curr != NULL) {
+                                                                struct node current_decl = newnode(VarDecl, NULL);
+                                                                addchild(current_decl, $1);
+                                                                addchild(current_decl, newnode(Identifier, $2));
+                                                                list = append(list, current_decl);
+                                                                curr = curr->next;
+                                                              } 
+                                                              $$ = list;
+                                                              } 
+                                                        ;
+
+MultipleIdentifiers: { $$ = NULL; }
+                   | MultipleIdentifiers COMMA IDENTIFIER   { $$ = append($1, newnode(Identifier, $3)); }
+                   ;
+
+Statement: LBRACE StatementList RBRACE      { int count = count_list($2); 
+                                              if (count == 1) $$ = $2->node;
+                                              else{ $$ = newnode(Block, NULL); addchildren($$, $2); } }
 
 OptionalFormalParams:                 { $$ = newnode(MethodParams, NULL); }
                     | FormalParams    { newnode(FormalParams, NULL); 
