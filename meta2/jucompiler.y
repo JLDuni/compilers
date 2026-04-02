@@ -102,7 +102,7 @@ MethodDecl: PUBLIC STATIC MethodHeader MethodBody     { $$ = newnode(MethodDecl,
 MethodHeader: Type IDENTIFIER LPAR OptionalFormalParams RPAR { $$ = newnode(MethodHeader, NULL); 
                                                       struct node_list *list = newlist($1);
                                                       append(list, newnode(Identifier, $2)); 
-                                                      append(list, $4); 
+                                                      list = append(list, $4); 
                                                       addchildren($$, list); }
 
             | VOID IDENTIFIER LPAR OptionalFormalParams RPAR { $$ = newnode(MethodHeader, NULL); 
@@ -176,9 +176,10 @@ Statement: IF LPAR Expr RPAR Statement %prec THEN         { $$ = newnode(If, NUL
         | PRINT LPAR Expr RPAR SEMICOLON           { $$ = newnode(Print, NULL); 
                                                       addchild($$, $3); }
 
-        | PRINT LPAR STRLIT RPAR SEMICOLON           { $$ = newnode(StrLit, NULL); 
+        | PRINT LPAR STRLIT RPAR SEMICOLON           { $$ = newnode(Print, NULL); 
                                                       addchild($$, newnode(StrLit, $3)); }
         | error SEMICOLON                             { $$ = NULL; }
+        | SEMICOLON                                   { $$ = NULL; }
         ;
 
 StatementList:          { $$ = NULL; }
@@ -202,7 +203,7 @@ ArgsList:     { $$ = NULL; }
         ;
 
 OptionalFormalParams:                 { $$ = newnode(MethodParams, NULL); }
-                    | FormalParams    { newnode(MethodParams, NULL); 
+                    | FormalParams    { $$ = newnode(MethodParams, NULL); 
                                       addchildren($$, $1); }
                     ;
          
@@ -259,7 +260,7 @@ Expr: Expr PLUS Expr    { $$ = newnode(Add, NULL); addchildren($$, append(newlis
     | MINUS Expr %prec UNARY_MINUS { $$ = newnode(Minus, NULL); addchild($$, $2); }
     | PLUS Expr %prec UNARY_PLUS   { $$ = newnode(Plus, NULL);  addchild($$, $2); }
     | NOT Expr                     { $$ = newnode(Not, NULL);   addchild($$, $2); }
-    | IDENTIFIER                   { $$ = newnode(Identifier, NULL); }
+    | IDENTIFIER                   { $$ = newnode(Identifier, $1); }
     | IDENTIFIER DOTLENGTH         { $$ = newnode(Length, NULL); addchild($$, newnode(Identifier, $1)); }
     | NATURAL                      { $$ = newnode(Natural, $1); }
     | DECIMAL                      { $$ = newnode(Decimal, $1); }

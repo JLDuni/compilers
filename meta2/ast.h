@@ -77,4 +77,6 @@ int count_list(struct node_list *list);
 
 struct node_list *copy_list(struct node_list *list);
 
+void free_ast(struct node *n);
+
 #endif

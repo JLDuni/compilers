@@ -3,53 +3,16 @@
 #include <stdlib.h>
 
 const char *node_names[] = {
-    "Program", 
-    "FieldDecl", 
-    "VarDecl", 
-    "MethodDecl", 
-    "MethodHeader", 
-    "MethodParams", 
-    "ParamDecl", 
-    "MethodBody", 
-    "Block", 
-    "If", 
-    "While", 
-    "Return", 
-    "Print", 
-    "Assign", 
-    "Or", 
-    "And", 
-    "Eq", 
-    "Ne", 
-    "Lt", 
-    "Gt", 
-    "Le", 
-    "Ge", 
-    "Add", 
-    "Sub", 
-    "Mul", 
-    "Div", 
-    "Mod", 
-    "Lshift", 
-    "Rshift", 
-    "Xor", 
-    "Not", 
-    "Minus", 
-    "Plus", 
-    "Length", 
-    "Call", 
-    "ParseArgs", 
-    "Bool", 
-    "BoolLit", 
-    "Double", 
-    "Decimal", 
-    "Identifier", 
-    "Int", 
-    "Natural", 
-    "StrLit", 
-    "StringArray", 
-    "Void"
-};
+    "Program",      "FieldDecl", "VarDecl",    "MethodDecl", "MethodHeader",
+    "MethodParams", "ParamDecl", "MethodBody", "Block",      "If",
+    "While",        "Return",    "Print",      "Assign",     "Or",
+    "And",          "Eq",        "Ne",         "Lt",         "Gt",
+    "Le",           "Ge",        "Add",        "Sub",        "Mul",
+    "Div",          "Mod",       "Lshift",     "Rshift",     "Xor",
+    "Not",          "Minus",     "Plus",       "Length",     "Call",
+    "ParseArgs",    "Bool",      "BoolLit",    "Double",     "Decimal",
+    "Identifier",   "Int",       "Natural",    "StrLit",     "StringArray",
+    "Void"};
 
 // create a node of a given category with a given lexical symbol
 struct node *newnode(category category, char *token) {
@@ -93,7 +56,11 @@ void show(struct node *node, int depth) {
   printf("%s", node_names[node->category]);
 
   if (node->token != NULL) {
-    printf(("(%s)"), node->token);
+    if (node->category == StrLit) {
+      printf("(\"%s\")", node->token); // Add escaped quotes for StrLit
+    } else {
+      printf("(%s)", node->token);
+    }
   }
 
   printf("\n");
@@ -115,16 +82,20 @@ struct node_list *newlist(struct node *n) {
 }
 
 struct node_list *append(struct node_list *list, struct node *n) {
-  if (n == NULL) return list;
-  if (list == NULL) return newlist(n);
+  if (n == NULL)
+    return list;
+  if (list == NULL)
+    return newlist(n);
 
   struct node_list *current_node = list;
   while (current_node->next != NULL) {
-    if(current_node->node == n) return list;
+    if (current_node->node == n)
+      return list;
     current_node = current_node->next;
   }
 
-  if(current_node->node == n) return list;
+  if (current_node->node == n)
+    return list;
 
   current_node->next = newlist(n);
   return list;
@@ -197,3 +168,23 @@ int count_list(struct node_list *list) {
   return count;
 }
 
+void free_ast(struct node *n) {
+  if (n == NULL)
+    return;
+
+  struct node_list *curr = n->children;
+  while (curr != NULL) {
+    struct node_list *temp = curr;
+    curr = curr->next;
+
+    free_ast(temp->node);
+
+    free(temp);
+  }
+
+  if (n->token != NULL) {
+    free(n->token);
+  }
+
+  free(n);
+}

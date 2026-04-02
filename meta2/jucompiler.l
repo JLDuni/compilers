@@ -104,18 +104,17 @@ reserved "++"|"--"|"null"|"Integer"|"System"|"abstract"|"assert"|"break"|"byte"|
 boolit "true"|"false"
 
 %%
-\n                      { line++; collumn = 1; }
-\r                      {}
+(\r|\r\n|\n)      { line++; collumn = 1; }
 [ \t\f]+                   {}
 
 "//"                    { BEGIN(SL_COMMENT); }
-<SL_COMMENT>.           {}
-<SL_COMMENT>\n          { line++; collumn = 1; BEGIN(0); }
+<SL_COMMENT>[^\n\r]*           {}
+<SL_COMMENT>(\r|\n|\r\n)          { line++; collumn = 1; BEGIN(0); }
 
 
 "/*"                    { start_comment_column = collumn - yyleng; start_comment_line = line; BEGIN(COMMENT); }
 <COMMENT>"*/"           { BEGIN(0); }
-<COMMENT>\n             { line++; collumn = 1; }
+<COMMENT>(\r\n|\n|\r)             { line++; collumn = 1; }
 <COMMENT>.              {}
 <COMMENT><<EOF>>        { PRINT_ERROR("Line %d, col %d: unterminated comment\n", start_comment_line, start_comment_column); yyterminate(); }
 
@@ -128,42 +127,21 @@ boolit "true"|"false"
 <STRING_STATE><<EOF>>         { PRINT_ERROR("Line %d, col %d: unterminated string literal\n", start_string_line, start_string_column); yyterminate(); }
 <STRING_STATE>.      { append_text(yytext, yyleng); }
 
-{reserved}              { OUT_VALUE(RESERVED, yytext); }
-{assign}                 {  OUT(ASSIGN); }
-{lpar}                  {  OUT(LPAR); }
-{rpar}                  {  OUT(RPAR); }
-{star}                  {  OUT(STAR); }
-{divide}                {  OUT(DIV); }
-{plus}                  {  OUT(PLUS); }
-{minus}                 {  OUT(MINUS); }
-{comma}                 { OUT(COMMA); }
-{equal}                 { OUT(EQ); }
-{ge}                    { OUT(GE); }
-{gt}                    { OUT(GT); }
-{lbrace}                { OUT(LBRACE); }
-{rbrace}                { OUT(RBRACE); }
-{le}                    { OUT(LE); }
-{lsq}                    { OUT(LSQ); }
-{rsq}                    { OUT(RSQ); }
-{lt}                    { OUT(LT); }
-{mod}                    { OUT(MOD); }
-{ne}                    { OUT(NE); }
-{not}                   { OUT(NOT); }
-{or}                   { OUT(OR); }
-{and}                   { OUT(AND); }
-{semicollon}                   { OUT(SEMICOLON); }
-{arrow}                   { OUT(ARROW); }
+{parseint}                   { OUT(PARSEINT); }
+{print}                   { OUT(PRINT); }
+".length"                 { OUT(DOTLENGTH); }
+
 {rshift}                   { OUT(RSHIFT); }
 {lshift}                   { OUT(LSHIFT); }
-{xor}                   { OUT(XOR); }
+{or}                   { OUT(OR); }
+{and}                   { OUT(AND); }
+{arrow}                   { OUT(ARROW); }
+{le}                    { OUT(LE); }
+{ge}                    { OUT(GE); }
+{equal}                 { OUT(EQ); }
+{ne}                    { OUT(NE); }
+
 {class}                   { OUT(CLASS); }
-".length"                 { OUT(DOTLENGTH); }
-{print}                   { OUT(PRINT); }
-{parseint}                   { OUT(PARSEINT); }
-{public}                   { OUT(PUBLIC); }
-{boolit}                    { OUT_VALUE(BOOLLIT, yytext); }
-
-
 "int"               {  OUT(INT); }
 {bool}                   { OUT(BOOL); }
 "double"                {  OUT(DOUBLE); }
@@ -175,10 +153,34 @@ boolit "true"|"false"
 "String"                { OUT(STRING); }
 "void"                  { OUT(VOID); }
 "while"                 { OUT(WHILE); }
+{public}                   { OUT(PUBLIC); }
+{boolit}                    { OUT_VALUE(BOOLLIT, yytext); }
 
-{natural}                {  OUT_VALUE(NATURAL, yytext); }
+{reserved}              { OUT_VALUE(RESERVED, yytext); }
+
 {decimal}                {  OUT_VALUE(DECIMAL, yytext); }
+{natural}                {  OUT_VALUE(NATURAL, yytext); }
 {identifier}            {  OUT_VALUE(IDENTIFIER, yytext); }
+
+{assign}                 {  OUT(ASSIGN); }
+{lpar}                  {  OUT(LPAR); }
+{rpar}                  {  OUT(RPAR); }
+{star}                  {  OUT(STAR); }
+{divide}                {  OUT(DIV); }
+{plus}                  {  OUT(PLUS); }
+{minus}                 {  OUT(MINUS); }
+{comma}                 { OUT(COMMA); }
+{gt}                    { OUT(GT); }
+{lbrace}                { OUT(LBRACE); }
+{rbrace}                { OUT(RBRACE); }
+{lsq}                    { OUT(LSQ); }
+{rsq}                    { OUT(RSQ); }
+{lt}                    { OUT(LT); }
+{mod}                    { OUT(MOD); }
+{not}                   { OUT(NOT); }
+{semicollon}                   { OUT(SEMICOLON); }
+{xor}                   { OUT(XOR); }
+
 .                       { PRINT_ERROR("Line %d, col %d: illegal character (%s)\n",line, collumn - yyleng, yytext); } 
 %%
 extern int yylex();
@@ -193,6 +195,7 @@ int main(int argc, char *argv[]) {
         print_error = 1;
     } else if (strcmp(argv[1], "-t") == 0) {
         show_ast = 1;
+        print_error = 1;
     } else if (strcmp(argv[1], "-e2") == 0) {
         show_ast = 0; 
       }
@@ -202,7 +205,8 @@ int main(int argc, char *argv[]) {
       while(yylex() != 0);
     } else {
         if (yyparse() == 0 && show_ast) {
-            show(ast, 0); 
+          show(ast, 0); 
+          free_ast(ast);
       }
     }
   return 0;
