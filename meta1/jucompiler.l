@@ -91,6 +91,7 @@ boollit "true"|"false"
 
 \"                      { BEGIN(STRING); start_string_line = line; start_string_column = collumn - yyleng; error = false;
                         string_buffer = malloc(1); string_len = 0; string_buffer[0] = '\0'; }
+
 <STRING>\"              { BEGIN(0); if(!error) OUT("STRLIT(\"%s\")\n", string_buffer); }
 <STRING>\\([fnrt\\"])   { append_text(yytext, yyleng); }
 <STRING>\\[^\n\r]|\\    { error = true; PRINT_ERROR("Line %d, col %d: invalid escape sequence (%s)\n", line, collumn - yyleng, yytext); }

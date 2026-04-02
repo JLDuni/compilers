@@ -4,7 +4,7 @@ TARGET = jucompiler
 LEX_FILE = jucompiler.l
 GEN_C = lex.yy.c
 FILE = code.txt
-SCRIPT = comp/test.sh
+SCRIPT = ../comp/test.sh
 
 all: $(TARGET)
 

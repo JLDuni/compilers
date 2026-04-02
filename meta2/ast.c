@@ -40,7 +40,7 @@ const char *node_names[] = {
     "Call", 
     "ParseArgs", 
     "Bool", 
-    "Boollit", 
+    "BoolLit", 
     "Double", 
     "Decimal", 
     "Identifier", 
@@ -115,23 +115,26 @@ struct node_list *newlist(struct node *n) {
 }
 
 struct node_list *append(struct node_list *list, struct node *n) {
-  if (list == NULL) {
-    return newlist(n);
-  }
+  if (n == NULL) return list;
+  if (list == NULL) return newlist(n);
 
   struct node_list *current_node = list;
   while (current_node->next != NULL) {
     if(current_node->node == n) return list;
     current_node = current_node->next;
   }
+
+  if(current_node->node == n) return list;
+
   current_node->next = newlist(n);
   return list;
 };
 
 void addchildren(struct node *parent, struct node_list *list) {
-  if (parent != NULL) {
+  if (parent != NULL && list != NULL) {
     parent->children = list;
   }
+  return;
 }
 
 void yyerror(const char *s) {
