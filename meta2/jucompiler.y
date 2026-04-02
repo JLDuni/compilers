@@ -17,7 +17,7 @@ struct node *ast;
 %token AND ASSIGN ARROW COMMA DIVIDE DOTLENGTH EQ GE GT LBRACE LPAR LSQ LE LSHIFT LT 
 %token MINUS MOD NE NOT OR PLUS RBRACE RPAR RSQ RSHIFT SEMICOLON STAR XOR
 
-%type<node> program function parameters parameter arguments expression
+%type<node> program function parameters parameter arguments expression MethodDecl MethodHeader
 %type<list> functions
 
 %left LOW
@@ -35,23 +35,62 @@ struct node *ast;
 %%
 
 program: CLASS IDENTIFIER LBRACE declarations RBRACE                { ast = $$ = newnode(Program, NULL);
-                                                                    addchildren($$, $1); }
+                                                                     struct node *identifier_node = newnode(Identifier, $2); 
+                                                                     struct node_list *id_list = newlist(identifier_node); 
+                                                                     id_list->next = $4;
+                                                                     addchildren($$, full_list); }
+
     ;
 
-declarations: declarations MethodDecl 
-            | declarations FieldDecl
-            | declarations SEMICOLON
+declarations: declarations MethodDecl                 { $$ = append($1, $2); }
+            | declarations FieldDecl                  { $$ = append($1, $2); }
+            | declarations SEMICOLON                  { $$ = $1}
             ;
 
-functions: function                 { $$ = newlist($1); }
-         | functions function       { $$ = append($1, $2); }
+MethodDecl: PUBLIC STATIC MethodHeader MethodBody     { $$ = newnode(MethodDecl, NULL); 
+                                                      struct node_list *list = newlist($3); 
+                                                      append(list, $4);
+                                                      addchildren($$, list); }
+;
 
-function: IDENTIFIER '(' parameters ')' '=' expression
-                                    { $$ = newnode(Function, NULL);
-                                      addchild($$, newnode(Identifier, $1));
-                                      addchild($$, $3);
-                                      addchild($$, $6); }
-    ;
+MethodHeader: Type IDENTIFIER LPAR OptionalFormalParams RPAR { $$ = newnode(MethodHeader, NULL); 
+                                                      struct node_list *list = newlist($1);
+                                                      append(list, newnode(Identifier, $2)); 
+                                                      append(list, $4); 
+                                                      addchildren($$, list); }
+
+            | VOID IDENTIFIER LPAR OptionalFormalParams RPAR { $$ = newnode(MethodHeader, NULL); 
+                                                               struct node_list *list = newlist(newnode(Void, NULL)); 
+                                                               append(list, newnode(Identifier, $2)); 
+                                                               append(list, $4); 
+                                                               addchildren($$, list); }
+            ;
+
+MethodBody: 
+
+OptionalFormalParams:                 { $$ = newnode(MethodParams, NULL); }
+                    | FormalParams    { newnode(FormalParams, NULL); 
+                                      addchildren($$, $1); }
+         
+FormalParams: Type IDENTIFIER { struct node *param_declaration = newnode(ParamDecl, NULL); 
+                                struct node_list *children = newlist($1); 
+                                append(children, newnode(Identifier, $2));
+                                addchildren(param_declaration, children); 
+                                $$ = param_declaration;
+                                }
+            | FormalParams COMMA TYPE IDENTIFIER   { struct node *param_declaration = newnode(ParamDecl, NULL); 
+                                                     struct node_list *children = newlist($3); 
+                                                     append(children, newnode(Identifier, $2)); 
+                                                     addchildren(param_declaration, children); 
+                                                     $$ = append($1, param_declaration); }
+
+            | STRING LSQ RSQ IDENTIFIER            { struct node *param_declaration = newnode(ParamDecl, NULL); 
+                                                     struct node_list *children = newlist(newnode(StringArray, NULL)); 
+                                                     append(children, newnode(Identifier, $4)); 
+                                                     addchildren(param_declaration, children); 
+                                                     $$ = newlist(param_declaration); }
+            ;
+
 
 parameters: parameter               { $$ = newnode(Parameters, NULL); addchild($$, $1); }
     | parameters ',' parameter      { addchild($1, $3); $$ = $1; }
