@@ -1,4 +1,0 @@
-
-void function(String num1, int num2) {
-  int lemons = 0;
-}
