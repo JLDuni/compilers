@@ -156,7 +156,7 @@ Statement: LBRACE StatementList RBRACE      { int count = count_list($2);
 Statement: IF LPAR Expr RPAR Statement %prec THEN         { $$ = newnode(If, NULL); 
                                                             addchild($$, $3); 
                                                             addchild($$, $5); 
-                                                            addchild($$, NULL); }
+                                                            addchild($$, newnode(Block, NULL)); }
          | IF LPAR Expr RPAR Statement ELSE Statement     { $$ = newnode(If, NULL); 
                                                             addchild($$, $3); 
                                                             addchild($$, $5); 
