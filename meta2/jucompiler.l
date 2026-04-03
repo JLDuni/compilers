@@ -5,6 +5,7 @@
 
   int lex_only = 0;
   int show_ast = 0;
+  int has_errors = 0;
   int collumn = 1;
   int line = 1;
   char *string_buffer = NULL;
@@ -204,11 +205,16 @@ int main(int argc, char *argv[]) {
     if (lex_only) {
       while(yylex() != 0);
     } else {
-        if (yyparse() == 0 && show_ast) {
-          show(ast, 0); 
-          free_ast(ast);
+      yyparse();
+      if (show_ast && has_errors == 0) {
+        show(ast, 0); 
       }
     }
+
+  if (ast != NULL) {
+    free_ast(ast);
+  }
+  free(string_buffer);
   return 0;
 }
 int yywrap() {  /* called on EOF, return 1 to terminate */

@@ -27,7 +27,7 @@ struct node *ast;
 %type <node> Expr Type OperationExpr
 
 %type <node_list> declarations BodyContent VarDecl MultipleIdentifiers StatementList
-%type <node_list> FormalParams ArgsList FieldDecl 
+%type <node_list> FormalParams ArgsList FieldDecl NonEmptyArgsList
 
 %right ASSIGN
 %left OR
@@ -63,7 +63,7 @@ Program: CLASS IDENTIFIER LBRACE declarations RBRACE                { ast = $$ =
     ;
 
 declarations:     { $$ = NULL; } 
-            |declarations MethodDecl                 { $$ = append($1, $2); }
+            | declarations MethodDecl                 { $$ = append($1, $2); }
             | declarations FieldDecl                  { if($1 == NULL) $$ = $2;
                                                         else {struct node_list *curr = $1;
                                                               while(curr->next != NULL) curr = curr->next; 
@@ -72,6 +72,8 @@ declarations:     { $$ = NULL; }
                                                               } 
                                                       }
             | declarations SEMICOLON                  { $$ = $1; }
+            // | declarations error SEMICOLON            { $$ = $1; }
+            | declarations error RBRACE            { $$ = $1; }
             ;
 
 FieldDecl: PUBLIC STATIC Type IDENTIFIER MultipleIdentifiers SEMICOLON      { struct node *decl = newnode(FieldDecl, NULL); 
@@ -90,7 +92,7 @@ FieldDecl: PUBLIC STATIC Type IDENTIFIER MultipleIdentifiers SEMICOLON      { st
                                                                               } 
                                                                               $$ = list; 
                                                                               }
-        | error SEMICOLON                                                     { $$ = NULL; }
+         | error SEMICOLON                                                    {$$ = NULL; }
         ;
 
 MethodDecl: PUBLIC STATIC MethodHeader MethodBody     { $$ = newnode(MethodDecl, NULL); 
@@ -199,9 +201,12 @@ MethodInvocation: IDENTIFIER LPAR ArgsList RPAR     { $$ = newnode(Call, NULL);
                 ;
 
 ArgsList:     { $$ = NULL; }
-        | Expr      { $$ = newlist($1); }
-        |ArgsList COMMA Expr     { $$ = append($1, $3); }
+        | NonEmptyArgsList  { $$ = $1; }
         ;
+
+NonEmptyArgsList: Expr      { $$ = newlist($1); }
+                | NonEmptyArgsList COMMA Expr     { $$ = append($1, $3); }
+                ;
 
 OptionalFormalParams:                 { $$ = newnode(MethodParams, NULL); }
                     | FormalParams    { $$ = newnode(MethodParams, NULL); 
@@ -225,6 +230,12 @@ FormalParams: Type IDENTIFIER { struct node *param_declaration = newnode(ParamDe
                                                      append(children, newnode(Identifier, $4)); 
                                                      addchildren(param_declaration, children); 
                                                      $$ = newlist(param_declaration); }
+
+            | FormalParams COMMA STRING LSQ RSQ IDENTIFIER  { struct node *param_declaration = newnode(ParamDecl, NULL); 
+                                                     struct node_list *children = newlist(newnode(StringArray, NULL)); 
+                                                     append(children, newnode(Identifier, $6)); 
+                                                     addchildren(param_declaration, children); 
+                                                     $$ = append($1, param_declaration);  }
             ;
 
 Assignment: IDENTIFIER ASSIGN Expr               { $$ = newnode(Assign, NULL); 

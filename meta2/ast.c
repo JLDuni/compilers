@@ -114,6 +114,9 @@ void yyerror(const char *s) {
   extern char *string_buffer;
   extern int start_string_column;
   extern char *yytext;
+  extern int has_errors;
+  has_errors = 1;
+
   if (yytext[0] == '"' && strlen(yytext) == 1) {
     printf("Line %d, col %d: %s: \"%s\"\n", line, start_string_column,
            s, string_buffer);
