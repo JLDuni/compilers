@@ -111,10 +111,16 @@ void addchildren(struct node *parent, struct node_list *list) {
 void yyerror(const char *s) {
   /* Using your existing line and collumn variables */
   extern int line, collumn;
+  extern char *string_buffer;
+  extern int start_string_column;
   extern char *yytext;
-
-  printf("Line %d, col %d: %s: %s\n", line, (int)(collumn - strlen(yytext)), s,
-         yytext);
+  if (yytext[0] == '"' && strlen(yytext) == 1) {
+    printf("Line %d, col %d: %s: \"%s\"\n", line, start_string_column,
+           s, string_buffer);
+  } else {
+    printf("Line %d, col %d: %s: %s\n", line, (int)(collumn - strlen(yytext)), s,
+        yytext);
+  }
 }
 
 struct node *copy_node(struct node *n) {

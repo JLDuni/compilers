@@ -24,7 +24,7 @@ struct node *ast;
 
 %type <node> Program MethodDecl MethodHeader MethodBody  OptionalFormalParams Statement
 %type <node> Assignment MethodInvocation ParseArgs 
-%type <node> Expr Type 
+%type <node> Expr Type OperationExpr
 
 %type <node_list> declarations BodyContent VarDecl MultipleIdentifiers StatementList
 %type <node_list> FormalParams ArgsList FieldDecl 
@@ -149,22 +149,23 @@ MultipleIdentifiers: { $$ = NULL; }
                    ;
 
 Statement: LBRACE StatementList RBRACE      { int count = count_list($2); 
-                                              if (count == 1) $$ = $2->node;
-                                              else{ $$ = newnode(Block, NULL); addchildren($$, $2); } }
+                                              if (count > 1) {$$ = newnode(Block, NULL); addchildren($$, $2);}
+                                              else if (count == 1) $$ = $2->node;
+                                              else{ $$ = NULL; } }
         ;
 
 Statement: IF LPAR Expr RPAR Statement %prec THEN         { $$ = newnode(If, NULL); 
                                                             addchild($$, $3); 
-                                                            addchild($$, $5); 
+                                                            addchild($$, $5 != NULL ? $5 : newnode(Block, NULL)); 
                                                             addchild($$, newnode(Block, NULL)); }
          | IF LPAR Expr RPAR Statement ELSE Statement     { $$ = newnode(If, NULL); 
                                                             addchild($$, $3); 
-                                                            addchild($$, $5); 
-                                                            addchild($$, $7); }
+                                                            addchild($$, $5 != NULL ? $5 : newnode(Block, NULL)); 
+                                                            addchild($$, $7 != NULL ? $7 : newnode(Block, NULL)); }
 
          | WHILE LPAR Expr RPAR Statement                 { $$ = newnode(While, NULL); 
                                                             addchild($$, $3); 
-                                                            addchild($$, $5); }
+                                                            addchild($$, $5 != NULL ? $5 : newnode(Block, NULL)); }
 
          | RETURN SEMICOLON                               { $$ = newnode(Return, NULL); }
          | RETURN Expr SEMICOLON                         { $$ = newnode(Return, NULL); 
@@ -231,6 +232,7 @@ Assignment: IDENTIFIER ASSIGN Expr               { $$ = newnode(Assign, NULL);
                                                     append(list, $3); 
                                                     addchildren($$, list); }
            ;
+            
 
 ParseArgs: PARSEINT LPAR IDENTIFIER LSQ Expr RSQ RPAR     { $$ = newnode(ParseArgs, NULL); 
                                                           struct node_list *list = newlist(newnode(Identifier, $3)); 
@@ -240,36 +242,38 @@ ParseArgs: PARSEINT LPAR IDENTIFIER LSQ Expr RSQ RPAR     { $$ = newnode(ParseAr
          | PARSEINT LPAR error RPAR                       { $$ = NULL; }
          ;
 
-Expr: Expr PLUS Expr    { $$ = newnode(Add, NULL); addchildren($$, append(newlist($1), $3)); }
-    | Expr MINUS Expr   { $$ = newnode(Sub, NULL); addchildren($$, append(newlist($1), $3)); }
-    | Expr STAR Expr    { $$ = newnode(Mul, NULL); addchildren($$, append(newlist($1), $3)); }
-    | Expr DIV Expr     { $$ = newnode(Div, NULL); addchildren($$, append(newlist($1), $3)); }
-    | Expr MOD Expr     { $$ = newnode(Mod, NULL); addchildren($$, append(newlist($1), $3)); }
-    | Expr AND Expr     { $$ = newnode(And, NULL); addchildren($$, append(newlist($1), $3)); }
-    | Expr OR Expr      { $$ = newnode(Or, NULL);  addchildren($$, append(newlist($1), $3)); }
-    | Expr XOR Expr     { $$ = newnode(Xor, NULL); addchildren($$, append(newlist($1), $3)); }
-    | Expr LSHIFT Expr  { $$ = newnode(Lshift, NULL); addchildren($$, append(newlist($1), $3)); }
-    | Expr RSHIFT Expr  { $$ = newnode(Rshift, NULL); addchildren($$, append(newlist($1), $3)); }
-    | Expr EQ Expr      { $$ = newnode(Eq, NULL);  addchildren($$, append(newlist($1), $3)); }
-    | Expr NE Expr      { $$ = newnode(Ne, NULL);  addchildren($$, append(newlist($1), $3)); }
-    | Expr GE Expr      { $$ = newnode(Ge, NULL);  addchildren($$, append(newlist($1), $3)); }
-    | Expr GT Expr      { $$ = newnode(Gt, NULL);  addchildren($$, append(newlist($1), $3)); }
-    | Expr LE Expr      { $$ = newnode(Le, NULL);  addchildren($$, append(newlist($1), $3)); }
-    | Expr LT Expr      { $$ = newnode(Lt, NULL);  addchildren($$, append(newlist($1), $3)); }
+Expr: Assignment        { $$ = $1; }
+    | OperationExpr     { $$ = $1; }
 
-    | MINUS Expr %prec UNARY_MINUS { $$ = newnode(Minus, NULL); addchild($$, $2); }
-    | PLUS Expr %prec UNARY_PLUS   { $$ = newnode(Plus, NULL);  addchild($$, $2); }
-    | NOT Expr                     { $$ = newnode(Not, NULL);   addchild($$, $2); }
-    | IDENTIFIER                   { $$ = newnode(Identifier, $1); }
-    | IDENTIFIER DOTLENGTH         { $$ = newnode(Length, NULL); addchild($$, newnode(Identifier, $1)); }
-    | NATURAL                      { $$ = newnode(Natural, $1); }
-    | DECIMAL                      { $$ = newnode(Decimal, $1); }
-    | BOOLLIT                      { $$ = newnode(Boollit, $1); }
-    | MethodInvocation             { $$ = $1; }
-    | Assignment                  { $$ = $1; }
-    | ParseArgs                    { $$ = $1; }
+OperationExpr: OperationExpr PLUS OperationExpr    { $$ = newnode(Add, NULL); addchildren($$, append(newlist($1), $3)); }
+    | OperationExpr MINUS OperationExpr   { $$ = newnode(Sub, NULL); addchildren($$, append(newlist($1), $3)); }
+    | OperationExpr STAR OperationExpr    { $$ = newnode(Mul, NULL); addchildren($$, append(newlist($1), $3)); }
+    | OperationExpr DIV OperationExpr     { $$ = newnode(Div, NULL); addchildren($$, append(newlist($1), $3)); }
+    | OperationExpr MOD OperationExpr     { $$ = newnode(Mod, NULL); addchildren($$, append(newlist($1), $3)); }
+    | OperationExpr AND OperationExpr     { $$ = newnode(And, NULL); addchildren($$, append(newlist($1), $3)); }
+    | OperationExpr OR OperationExpr      { $$ = newnode(Or, NULL);  addchildren($$, append(newlist($1), $3)); }
+    | OperationExpr XOR OperationExpr     { $$ = newnode(Xor, NULL); addchildren($$, append(newlist($1), $3)); }
+    | OperationExpr LSHIFT OperationExpr  { $$ = newnode(Lshift, NULL); addchildren($$, append(newlist($1), $3)); }
+    | OperationExpr RSHIFT OperationExpr  { $$ = newnode(Rshift, NULL); addchildren($$, append(newlist($1), $3)); }
+    | OperationExpr EQ OperationExpr      { $$ = newnode(Eq, NULL);  addchildren($$, append(newlist($1), $3)); }
+    | OperationExpr NE OperationExpr      { $$ = newnode(Ne, NULL);  addchildren($$, append(newlist($1), $3)); }
+    | OperationExpr GE OperationExpr      { $$ = newnode(Ge, NULL);  addchildren($$, append(newlist($1), $3)); }
+    | OperationExpr GT OperationExpr      { $$ = newnode(Gt, NULL);  addchildren($$, append(newlist($1), $3)); }
+    | OperationExpr LE OperationExpr      { $$ = newnode(Le, NULL);  addchildren($$, append(newlist($1), $3)); }
+    | OperationExpr LT OperationExpr      { $$ = newnode(Lt, NULL);  addchildren($$, append(newlist($1), $3)); }
+
+    | MINUS OperationExpr %prec UNARY_MINUS { $$ = newnode(Minus, NULL); addchild($$, $2); }
+    | PLUS OperationExpr %prec UNARY_PLUS   { $$ = newnode(Plus, NULL);  addchild($$, $2); }
+    | NOT OperationExpr                     { $$ = newnode(Not, NULL);   addchild($$, $2); }
+    | IDENTIFIER                            { $$ = newnode(Identifier, $1); }
+    | IDENTIFIER DOTLENGTH                  { $$ = newnode(Length, NULL); addchild($$, newnode(Identifier, $1)); }
+    | NATURAL                               { $$ = newnode(Natural, $1); }
+    | DECIMAL                               { $$ = newnode(Decimal, $1); }
+    | BOOLLIT                               { $$ = newnode(Boollit, $1); }
+    | MethodInvocation                      { $$ = $1; }
+    | ParseArgs                             { $$ = $1; }
     | LPAR Expr RPAR               { $$ = $2; }
-    | LPAR error RPAR              { $$ = NULL; }
+    | LPAR error RPAR                       { $$ = NULL; }
     ;
 
 Type: BOOL          { $$ = newnode(Bool, NULL); }
