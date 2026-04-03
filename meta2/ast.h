@@ -44,7 +44,7 @@ typedef enum {
     ParseArgs,          
 
     Bool,               
-    Boollit,            
+    BoolLit,            
     Double,             
     Decimal,            
     Identifier,         

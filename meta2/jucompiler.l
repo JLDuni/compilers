@@ -146,7 +146,6 @@ boolit "true"|"false"
 {bool}                   { OUT(BOOL); }
 "double"                {  OUT(DOUBLE); }
 "if"                    {  OUT(IF); }
-"then"                  {  OUT(THEN); }
 "else"                  {  OUT(ELSE); }
 {return}                { OUT(RETURN); }
 "static"                { OUT(STATIC); }

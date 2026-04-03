@@ -12,14 +12,17 @@ struct node *ast;
 
 %}
 
-%nonassoc THEN
-%nonassoc ELSE
+%union{
+    char *lexeme;
+    struct node_list *node_list;
+    struct node *node;
+}
+
 
 %token <lexeme> IDENTIFIER NATURAL DECIMAL STRLIT RESERVED BOOLLIT
 
-%token BOOL CLASS DOUBLE ELSE IF INT PRINT PARSEINT PUBLIC RETURN STATIC STRING VOID WHILE THEN
-
-%token AND ASSIGN ARROW COMMA DIVIDE DOTLENGTH EQ GE GT LBRACE LPAR LSQ LE LSHIFT LT 
+%token BOOL CLASS DOUBLE ELSE IF INT PRINT PARSEINT PUBLIC RETURN STATIC STRING VOID WHILE
+%token AND ASSIGN ARROW COMMA DIV DOTLENGTH EQ GE GT LBRACE LPAR LSQ LE LSHIFT LT 
 %token MINUS MOD NE NOT OR PLUS RBRACE RPAR RSQ RSHIFT SEMICOLON STAR XOR
 
 %type <node> Program MethodDecl MethodHeader MethodBody  OptionalFormalParams Statement
@@ -27,7 +30,7 @@ struct node *ast;
 %type <node> Expr Type OperationExpr
 
 %type <node_list> declarations BodyContent VarDecl MultipleIdentifiers StatementList
-%type <node_list> FormalParams ArgsList FieldDecl NonEmptyArgsList
+%type <node_list> FormalParams ArgsList FieldDecl NonEmptyArgsList TypeList
 
 %right ASSIGN
 %left OR
@@ -39,16 +42,12 @@ struct node *ast;
 %left PLUS MINUS
 %left STAR DIV MOD
 %right NOT UNARY_PLUS UNARY_MINUS
+%left LPAR RPAR LSQ RSQ DOTLENGTH 
 
-%left LOW
-%left '+' '-'
-%left '*' '/'
+%nonassoc IF_PREC
+%nonassoc ELSE
 
-%union{
-    char *lexeme;
-    struct node_list *node_list;
-    struct node *node;
-}
+
 
 /* START grammar rules section -- BNF grammar */
 
@@ -73,7 +72,6 @@ declarations:     { $$ = NULL; }
                                                       }
             | declarations SEMICOLON                  { $$ = $1; }
             // | declarations error SEMICOLON            { $$ = $1; }
-            | declarations error RBRACE            { $$ = $1; }
             ;
 
 FieldDecl: PUBLIC STATIC Type IDENTIFIER MultipleIdentifiers SEMICOLON      { struct node *decl = newnode(FieldDecl, NULL); 
@@ -112,6 +110,8 @@ MethodHeader: Type IDENTIFIER LPAR OptionalFormalParams RPAR { $$ = newnode(Meth
                                                                append(list, newnode(Identifier, $2)); 
                                                                append(list, $4); 
                                                                addchildren($$, list); }
+
+            
             ;
 
 MethodBody: LBRACE BodyContent RBRACE     { $$ = newnode(MethodBody, NULL); 
@@ -156,7 +156,7 @@ Statement: LBRACE StatementList RBRACE      { int count = count_list($2);
                                               else{ $$ = NULL; } }
         ;
 
-Statement: IF LPAR Expr RPAR Statement %prec THEN         { $$ = newnode(If, NULL); 
+Statement: IF LPAR Expr RPAR Statement %prec IF_PREC         { $$ = newnode(If, NULL); 
                                                             addchild($$, $3); 
                                                             addchild($$, $5 != NULL ? $5 : newnode(Block, NULL)); 
                                                             addchild($$, newnode(Block, NULL)); }
@@ -213,29 +213,27 @@ OptionalFormalParams:                 { $$ = newnode(MethodParams, NULL); }
                                       addchildren($$, $1); }
                     ;
          
-FormalParams: Type IDENTIFIER { struct node *param_declaration = newnode(ParamDecl, NULL); 
-                                struct node_list *children = newlist($1); 
-                                append(children, newnode(Identifier, $2));
-                                addchildren(param_declaration, children); 
-                                $$ = newlist(param_declaration);
-                                }
-            | FormalParams COMMA Type IDENTIFIER   { struct node *param_declaration = newnode(ParamDecl, NULL); 
-                                                     struct node_list *children = newlist($3); 
-                                                     append(children, newnode(Identifier, $4)); 
-                                                     addchildren(param_declaration, children); 
-                                                     $$ = append($1, param_declaration); }
-
+FormalParams: TypeList                              { $$ = $1; }             
             | STRING LSQ RSQ IDENTIFIER            { struct node *param_declaration = newnode(ParamDecl, NULL); 
                                                      struct node_list *children = newlist(newnode(StringArray, NULL)); 
                                                      append(children, newnode(Identifier, $4)); 
                                                      addchildren(param_declaration, children); 
                                                      $$ = newlist(param_declaration); }
 
-            | FormalParams COMMA STRING LSQ RSQ IDENTIFIER  { struct node *param_declaration = newnode(ParamDecl, NULL); 
-                                                     struct node_list *children = newlist(newnode(StringArray, NULL)); 
-                                                     append(children, newnode(Identifier, $6)); 
+            ;
+
+TypeList: Type IDENTIFIER { struct node *param_declaration = newnode(ParamDecl, NULL); 
+                                struct node_list *children = newlist($1); 
+                                append(children, newnode(Identifier, $2));
+                                addchildren(param_declaration, children); 
+                                $$ = newlist(param_declaration);
+                                }
+            | TypeList COMMA Type IDENTIFIER   { struct node *param_declaration = newnode(ParamDecl, NULL); 
+                                                     struct node_list *children = newlist($3); 
+                                                     append(children, newnode(Identifier, $4)); 
                                                      addchildren(param_declaration, children); 
-                                                     $$ = append($1, param_declaration);  }
+                                                     $$ = append($1, param_declaration); }
+
             ;
 
 Assignment: IDENTIFIER ASSIGN Expr               { $$ = newnode(Assign, NULL); 
@@ -280,7 +278,7 @@ OperationExpr: OperationExpr PLUS OperationExpr    { $$ = newnode(Add, NULL); ad
     | IDENTIFIER DOTLENGTH                  { $$ = newnode(Length, NULL); addchild($$, newnode(Identifier, $1)); }
     | NATURAL                               { $$ = newnode(Natural, $1); }
     | DECIMAL                               { $$ = newnode(Decimal, $1); }
-    | BOOLLIT                               { $$ = newnode(Boollit, $1); }
+    | BOOLLIT                               { $$ = newnode(BoolLit, $1); }
     | MethodInvocation                      { $$ = $1; }
     | ParseArgs                             { $$ = $1; }
     | LPAR Expr RPAR               { $$ = $2; }
