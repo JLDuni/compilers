@@ -10,6 +10,8 @@ struct symbol_list *symbol_table;
 
 void check_method(struct node *method_decl) {
   struct node *method_header = getchild(method_decl, 0);
+  struct node *method_body = getchild(method_decl, 1);
+
   struct node *type_node = getchild(method_header, 0);
   struct node *method_id = getchild(method_header, 1);
   struct node *parameters = getchild(method_header, 2);
@@ -28,59 +30,31 @@ void check_method(struct node *method_decl) {
   local_table->identifier = NULL;
   insert_symbol(local_table, "return", return_type, NULL);
 
+  method_decl->local_symbols = local_table;
+
   check_parameters(parameters, local_table);
-  // TODO check expression
-  // check_expression(getchild(method_decl, 2), local_table);
 
   struct node *body = getchild(method_decl, 1);
   // TODO check body
 }
 
-char *type_to_string(enum type type) {
-  switch (type) {
-  case integer_type:
-    return "int";
-  case double_type:
-    return "double";
-  case boolean_type:
-    return "boolean";
-  case string_array_type:
-    return "String[]";
-  case void_type:
-    return "void";
-  default:
-    return "undef";
+void check_method_body(struct node *method_body, struct symbol_list *local_table) {
+  //TODO remove if needed
+  if (method_body == NULL || local_table == NULL) {
+    return;
+  }
+  struct node_list *curr = method_body->children;
+  while (curr != NULL) {
+    struct node *child = curr->node;
+    if (child != NULL) {
+      if (child->category == VarDecl) {
+        //TODO make check_var_decl
+      } else if (child->category) {
+        //TODO make check statement function
+      }
+    }
   }
 }
-
-enum type category_type(category c) {
-  switch (c) {
-  case Int:
-  case Natural:
-    return integer_type;
-
-  case Double:
-  case Decimal:
-    return double_type;
-
-  case Bool:
-  case Boollit:
-    return boolean_type;
-
-  case StringArray:
-    return string_array_type;
-
-  case Void:
-    return void_type;
-
-  default:
-    return undef_type;
-  }
-}
-
-// void check_expression(struct node *expression,
-//                       struct symbol_list *scope_table) {
-// }
 
 void check_parameters(struct node *parameters,
                       struct symbol_list *scope_table) {
@@ -96,8 +70,8 @@ void check_parameters(struct node *parameters,
 
       char *identifier = id->token;
       if (search_symbol(scope_table, identifier) != NULL) {
-        printf("Identifier already in symbol table in line %d, column %d\n",
-               id->line, id->column);
+        printf("Line %d, col %d: Symbol %s already defined", id->line,
+               id->column, id->token);
         semantic_errors++;
         return;
       } else {
@@ -160,6 +134,48 @@ struct symbol_list *search_symbol(struct symbol_list *table, char *identifier) {
     if (strcmp(symbol->identifier, identifier) == 0)
       return symbol;
   return NULL;
+}
+
+char *type_to_string(enum type type) {
+  switch (type) {
+  case integer_type:
+    return "int";
+  case double_type:
+    return "double";
+  case boolean_type:
+    return "boolean";
+  case string_array_type:
+    return "String[]";
+  case void_type:
+    return "void";
+  default:
+    return "undef";
+  }
+}
+
+enum type category_type(category c) {
+  switch (c) {
+  case Int:
+  case Natural:
+    return integer_type;
+
+  case Double:
+  case Decimal:
+    return double_type;
+
+  case Bool:
+  case Boollit:
+    return boolean_type;
+
+  case StringArray:
+    return string_array_type;
+
+  case Void:
+    return void_type;
+
+  default:
+    return undef_type;
+  }
 }
 
 void print_tables(struct node *program) {

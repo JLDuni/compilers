@@ -5,6 +5,7 @@
 
   int lex_only = 0;
   int show_ast = 0;
+  int has_errors = 0;
   int collumn = 1;
   int line = 1;
   char *string_buffer = NULL;
@@ -18,22 +19,22 @@
   int start_string_line = 0;
   int start_string_column = 0;
 
-int yyparse(void);
-void yyerror(char *);
+  int yyparse(void);
+  void yyerror(char *);
 
-int lex_line = 1, lex_column = 1;
-int syn_line = -1, syn_column = -1;
-int errors = 0;
-int string_len = 0;
+  int lex_line = 1, lex_column = 1;
+  int syn_line = -1, syn_column = -1;
+  int errors = 0;
+  int string_len = 0;
 
-extern struct node *ast;
+  extern struct node *ast;
 
-void append_text(char *text, int len) {
-    string_buffer = realloc(string_buffer, string_len + len);
-    memcpy(string_buffer + string_len, text, len);
-    string_len += len;
-    string_buffer[string_len] = '\0';
-}
+  void append_text(char *text, int len) {
+      string_buffer = realloc(string_buffer, string_len + len);
+      memcpy(string_buffer + string_len, text, len);
+      string_len += len;
+      string_buffer[string_len] = '\0';
+  }
 
   #define OUT(fmt) do { \
     if(print_tokens) printf(#fmt"\n"); \
@@ -53,7 +54,6 @@ void append_text(char *text, int len) {
   } while(0); 
 
   #define PRINT_ERROR(fmt, ...) if(print_tokens || print_error) printf(fmt , ##__VA_ARGS__)
-  #define PASS_TOKEN() yylval.lexeme = strdup(yytext);
 
   # define YY_USER_ACTION \
     collumn += yyleng;
@@ -146,7 +146,6 @@ boolit "true"|"false"
 {bool}                   { OUT(BOOL); }
 "double"                {  OUT(DOUBLE); }
 "if"                    {  OUT(IF); }
-"then"                  {  OUT(THEN); }
 "else"                  {  OUT(ELSE); }
 {return}                { OUT(RETURN); }
 "static"                { OUT(STATIC); }
@@ -198,17 +197,23 @@ int main(int argc, char *argv[]) {
         print_error = 1;
     } else if (strcmp(argv[1], "-e2") == 0) {
         show_ast = 0; 
+        print_error = 1;
       }
     }
 
     if (lex_only) {
       while(yylex() != 0);
     } else {
-        if (yyparse() == 0 && show_ast) {
-          show(ast, 0); 
-          free_ast(ast);
+      yyparse();
+      if (show_ast && has_errors == 0) {
+        show(ast, 0); 
       }
     }
+
+  if (ast != NULL) {
+    free_ast(ast);
+  }
+  free(string_buffer);
   return 0;
 }
 int yywrap() {  /* called on EOF, return 1 to terminate */

@@ -1,7 +1,7 @@
-#ifndef _SEMANTICS_H
-#define _SEMANTICS_H
-
+#ifndef SEMANTICS_H
+#define SEMANTICS_H
 #include "ast.h"
+#include <stdbool.h>
 
 int check_program(struct node *program);
 
