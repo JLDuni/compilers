@@ -1,5 +1,6 @@
 #ifndef _AST_H
 #define _AST_H
+#include "semantics.h"
 #include <string.h>
 
 typedef enum {
@@ -60,14 +61,12 @@ enum type {
   double_type,
   boolean_type,
   string_array_type,
-  void_type
+  void_type,
+  undef_type
 };
 
 #define type_name(type)                                                        \
   (type == integer_type ? "integer" : (type == double_type ? "double" : "none"))
-#define category_type(category)                                                \
-  (category == Int ? integer_type                                              \
-                   : (category == Double ? double_type : no_type))
 
 struct node {
   category category;
@@ -75,6 +74,7 @@ struct node {
   enum type type;
   int line;
   int column;
+  struct symbol_list *local_symbols;
   struct node_list *children;
 };
 

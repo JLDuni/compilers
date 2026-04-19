@@ -8,19 +8,32 @@ int semantic_errors = 0;
 
 struct symbol_list *symbol_table;
 
-void check_method(struct node *function) {
-  struct node *id = getchild(function, 0);
-  if (search_symbol(symbol_table, id->token) == NULL) {
-    insert_symbol(symbol_table, id->token, no_type, function);
+void check_method(struct node *method_decl) {
+  struct node *method_header = getchild(method_decl, 0);
+  struct node *type_node = getchild(method_header, 0);
+  struct node *method_id = getchild(method_header, 1);
+  struct node *parameters = getchild(method_header, 2);
+
+  enum type return_type = category_type(type_node->category);
+
+  if (search_symbol(symbol_table, method_id->token) == NULL) {
+    insert_symbol(symbol_table, method_header->token, return_type, method_decl);
   } else {
-    printf("Identifier %s already declared\n", id->token);
+    printf("Line %d, Column %d: Symbol %s already defined\n", method_id->line,
+           method_id->column, method_id->token);
     semantic_errors++;
   }
   struct symbol_list *local_table = malloc(sizeof(struct symbol_list));
   local_table->next = NULL;
   local_table->identifier = NULL;
-  check_parameters(getchild(function, 1), local_table);
-  check_expression(getchild(function, 2), local_table);
+  insert_symbol(local_table, "return", return_type, NULL);
+
+  check_parameters(parameters, local_table);
+  // TODO check expression
+  // check_expression(getchild(method_decl, 2), local_table);
+
+  struct node *body = getchild(method_decl, 1);
+  // TODO check body
 }
 
 char *type_to_string(enum type type) {
@@ -40,6 +53,31 @@ char *type_to_string(enum type type) {
   }
 }
 
+enum type category_type(category c) {
+  switch (c) {
+  case Int:
+  case Natural:
+    return integer_type;
+
+  case Double:
+  case Decimal:
+    return double_type;
+
+  case Bool:
+  case Boollit:
+    return boolean_type;
+
+  case StringArray:
+    return string_array_type;
+
+  case Void:
+    return void_type;
+
+  default:
+    return undef_type;
+  }
+}
+
 // void check_expression(struct node *expression,
 //                       struct symbol_list *scope_table) {
 // }
@@ -55,6 +93,7 @@ void check_parameters(struct node *parameters,
     if (current_parameter != NULL) {
       struct node *id = getchild(current_parameter, 1);
       struct node *type = getchild(current_parameter, 0);
+
       char *identifier = id->token;
       if (search_symbol(scope_table, identifier) != NULL) {
         printf("Identifier already in symbol table in line %d, column %d\n",
@@ -70,9 +109,8 @@ void check_parameters(struct node *parameters,
   }
 }
 
-void check_field_decl(struct node *field_decl, struct symbol_list *global_table) {
-
-}
+void check_field_decl(struct node *field_decl,
+                      struct symbol_list *local_table) {}
 
 // semantic analysis begins here, with the AST root node
 int check_program(struct node *program) {
@@ -85,7 +123,7 @@ int check_program(struct node *program) {
   while ((child = child->next) != NULL) {
     if (child->node->category == MethodDecl) {
       check_method(child->node);
-    } else if (child->node->category == ParamDecl) {
+    } else if (child->node->category == FieldDecl) {
       check_field_decl(child->node, symbol_table);
     }
     child = child->next;
@@ -124,8 +162,31 @@ struct symbol_list *search_symbol(struct symbol_list *table, char *identifier) {
   return NULL;
 }
 
-void show_symbol_table() {
-  struct symbol_list *symbol;
-  for (symbol = symbol_table->next; symbol != NULL; symbol = symbol->next)
-    printf("Symbol %s : %s\n", symbol->identifier, type_name(symbol->type));
+void print_tables(struct node *program) {
+  printf("===== Class %s Symbol Table =====\n", symbol_table->identifier);
+  struct symbol_list *s = symbol_table->next;
+  while (s != NULL) {
+    printf("%s\t%s\t%s\n", s->identifier, "(...)", type_to_string(s->type));
+    s = s->next;
+  }
+  printf("\n");
+
+  struct node_list *child = program->children->next;
+  while (child != NULL) {
+    if (child->node->category == MethodDecl) {
+      struct node *header = getchild(child->node, 0);
+      char *m_name = getchild(header, 1)->token;
+      printf("===== Method %s(...) Symbol Table =====\n", m_name);
+
+      struct symbol_list *local = child->node->local_symbols;
+      struct symbol_list *ls = local->next;
+      while (ls != NULL) {
+        printf("%s\t\t%s%s\n", ls->identifier, type_to_string(ls->type),
+               ls->is_parameter ? "\tparam" : "");
+        ls = ls->next;
+      }
+      printf("\n");
+    }
+    child = child->next;
+  }
 }
