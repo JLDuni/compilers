@@ -55,7 +55,13 @@ typedef enum {
   Void
 } category;
 
-enum type { integer_type, double_type, no_type };
+enum type {
+  integer_type,
+  double_type,
+  boolean_type,
+  string_array_type,
+  void_type
+};
 
 #define type_name(type)                                                        \
   (type == integer_type ? "integer" : (type == double_type ? "double" : "none"))

@@ -8,7 +8,7 @@ int semantic_errors = 0;
 
 struct symbol_list *symbol_table;
 
-void check_function(struct node *function) {
+void check_method(struct node *function) {
   struct node *id = getchild(function, 0);
   if (search_symbol(symbol_table, id->token) == NULL) {
     insert_symbol(symbol_table, id->token, no_type, function);
@@ -23,66 +23,26 @@ void check_function(struct node *function) {
   check_expression(getchild(function, 2), local_table);
 }
 
-void check_expression(struct node *expression,
-                      struct symbol_list *scope_table) {
-  if (expression == NULL)
-    return;
-
-  if (expression->category == Natural) {
-    expression->type = integer_type;
-  } else if (expression->category == Double) {
-    expression->type = double_type;
-  } else if (expression->category == Identifier) {
-    struct symbol_list *list = search_symbol(scope_table, expression->token);
-    if (list != NULL) {
-      expression->type = list->type;
-    } else {
-      printf("Line %d, Column %d: Symbol %s is not defined\n", expression->line,
-             expression->column, expression->token);
-      expression->type = no_type;
-      semantic_errors++;
-    }
-  }
-
-  struct node_list *children = expression->children;
-  while (children != NULL) {
-    check_expression(children->node, scope_table);
-    children = children->next;
-  }
-
-  if (expression->category == Add || expression->category == Sub ||
-      expression->category == Mul || expression->category == Div) {
-
-    enum type t1 = getchild(expression, 0)->type;
-    enum type t2 = getchild(expression, 1)->type;
-
-    if (t1 == no_type) {
-      expression->type = t2;
-    } else if (t2 == no_type) {
-      expression->type = t1;
-    } else if (t1 == t2) {
-      expression->type = t1;
-    } else {
-      printf("Line %d, col %d: Incompatible types in operation\n",
-             expression->line, expression->column);
-      expression->type = no_type;
-      semantic_errors++;
-    }
-  }
-
-  if (expression->category == Call) {
-    struct node *id = getchild(expression, 0);
-    struct symbol_list *sym = search_symbol(symbol_table, id->token);
-    if (sym != NULL)
-      expression->type = sym->type;
-    else {
-      printf("Line %d, col %d: Symbol %s not defined\n", id->line, id->column,
-             id->token);
-      expression->type = no_type;
-      semantic_errors++;
-    }
+char *type_to_string(enum type type) {
+  switch (type) {
+  case integer_type:
+    return "int";
+  case double_type:
+    return "double";
+  case boolean_type:
+    return "boolean";
+  case string_array_type:
+    return "String[]";
+  case void_type:
+    return "void";
+  default:
+    return "undef";
   }
 }
+
+// void check_expression(struct node *expression,
+//                       struct symbol_list *scope_table) {
+// }
 
 void check_parameters(struct node *parameters,
                       struct symbol_list *scope_table) {
@@ -110,13 +70,27 @@ void check_parameters(struct node *parameters,
   }
 }
 
+void check_field_decl(struct node *field_decl, struct symbol_list *global_table) {
+
+}
+
 // semantic analysis begins here, with the AST root node
 int check_program(struct node *program) {
+  struct node *class_id = getchild(program, 0);
+
   symbol_table = (struct symbol_list *)malloc(sizeof(struct symbol_list));
   symbol_table->next = NULL;
+  symbol_table->identifier = strdup(class_id->token);
   struct node_list *child = program->children;
-  while ((child = child->next) != NULL)
-    check_function(child->node);
+  while ((child = child->next) != NULL) {
+    if (child->node->category == MethodDecl) {
+      check_method(child->node);
+    } else if (child->node->category == ParamDecl) {
+      check_field_decl(child->node, symbol_table);
+    }
+    child = child->next;
+  }
+
   return semantic_errors;
 }
 
