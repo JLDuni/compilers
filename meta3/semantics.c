@@ -133,8 +133,14 @@ void check_expression(struct node *expr, struct symbol_list *local_scope) {
   }
 
   switch (expr->category) {
-
   case Natural:
+    char *clean_token = clean_token_underscores(expr->token);
+    long long value = atoll(clean_token);
+    if (value > 2147483647LL) {
+      printf("Line %d, Column %d: Number %s out of bounds", expr->line,
+             expr->column, expr->token);
+      semantic_errors++;
+    }
     expr->type = integer_type;
     break;
   case Decimal:
@@ -269,6 +275,18 @@ void check_var_decl(struct node *var_decl, struct symbol_list *local_table) {
     }
     id = getchild(var_decl, i++);
   }
+}
+
+char *clean_token_underscores(char *token) {
+  char *clean_token = malloc(strlen(token) + 1);
+  int j = 0;
+  for (int i = 0; token[i] != '\0'; i++) {
+    if (token[i] != '_') {
+      clean_token[j++] = token[i];
+    }
+  }
+  clean_token[j] = '\0';
+  return clean_token;
 }
 
 void check_parameters(struct node *parameters,

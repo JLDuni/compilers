@@ -32,5 +32,6 @@ void check_statement(struct node *statement_body,
 void show_symbol_table();
 
 bool is_reserved_underscore(struct node *id_node);
+char *clean_token_underscores(char *token);
 
 #endif
