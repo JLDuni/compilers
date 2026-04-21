@@ -117,9 +117,12 @@ struct node_list *append(struct node_list *list, struct node *n) {
 
 void addchildren(struct node *parent, struct node_list *list) {
   if (parent != NULL && list != NULL) {
-    parent->children = list;
+    struct node_list *curr = parent->children;
+    while (curr->next != NULL) {
+      curr = curr->next;
+    }
+    curr->next = list;
   }
-  return;
 }
 
 void yyerror(const char *s) {

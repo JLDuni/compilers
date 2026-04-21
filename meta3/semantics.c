@@ -19,7 +19,7 @@ void check_method(struct node *method_decl) {
   enum type return_type = category_type(type_node->category);
 
   if (search_symbol(symbol_table, method_id->token) == NULL) {
-    insert_symbol(symbol_table, method_header->token, return_type, method_decl);
+    insert_symbol(symbol_table, method_id->token, return_type, method_decl);
   } else {
     printf("Line %d, Column %d: Symbol %s already defined\n", method_id->line,
            method_id->column, method_id->token);
@@ -40,7 +40,6 @@ void check_method(struct node *method_decl) {
 
 void check_method_body(struct node *method_body,
                        struct symbol_list *local_table) {
-  // TODO remove if needed
   if (method_body == NULL || local_table == NULL) {
     return;
   }
@@ -54,6 +53,7 @@ void check_method_body(struct node *method_body,
         check_statement(child, local_table);
       }
     }
+    curr = curr->next;
   }
 }
 
@@ -362,7 +362,7 @@ void check_var_decl(struct node *var_decl, struct symbol_list *local_table) {
     }
 
     if (search_symbol(local_table, id->token) != NULL) {
-      printf("Line %d, column %d: symbol %s already defined", id->line,
+      printf("Line %d, column %d: Symbol %s already defined\n", id->line,
              id->column, id->token);
       semantic_errors++;
     } else {
@@ -399,7 +399,7 @@ void check_parameters(struct node *parameters,
       if (!is_reserved_underscore(id)) {
         char *identifier = id->token;
         if (search_symbol(scope_table, identifier) != NULL) {
-          printf("Line %d, col %d: Symbol %s already defined", id->line,
+          printf("Line %d, col %d: Symbol %s already defined\n", id->line,
                  id->column, id->token);
           semantic_errors++;
           return;
@@ -443,13 +443,6 @@ int check_program(struct node *program) {
   symbol_table->next = NULL;
   if (class_id != NULL && class_id->token != NULL) {
     symbol_table->identifier = strdup(class_id->token);
-  } else {
-    symbol_table->identifier =
-        strdup("ErroNomeClasse"); 
-
-    printf("DEBUG CRÍTICO: class_id é NULL? %s | Categoria do nó: %d\n",
-           class_id == NULL ? "SIM" : "NÃO",
-           class_id != NULL ? class_id->category : -1);
   }
   symbol_table->identifier = strdup(class_id->token);
   struct node_list *child = program->children;

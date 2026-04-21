@@ -25,7 +25,6 @@
   int yyparse(void);
   void yyerror(char *);
 
-  int lex_line = 1, lex_column = 1;
   int syn_line = -1, syn_column = -1;
   int errors = 0;
   int string_len = 0;
@@ -59,7 +58,7 @@
   #define PRINT_ERROR(fmt, ...) if(print_tokens || print_error) printf(fmt , ##__VA_ARGS__)
 
   # define YY_USER_ACTION \
-    yylloc.first_line = lex_line; yylloc.first_column = lex_column; yylloc.last_column = lex_column + yyleng; yylloc.last_line = lex_line; \
+    yylloc.first_line = line; yylloc.first_column = collumn; yylloc.last_column = collumn + yyleng; yylloc.last_line = line; \
     collumn += yyleng;
 
 %}
