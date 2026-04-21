@@ -254,6 +254,45 @@ void check_expression(struct node *expr, struct symbol_list *local_scope) {
   }
 }
 
+struct symbol_list *find_correspondent_method(char *call_identifier,
+                                              struct node *call_node) {
+  struct node_list *call_id_list = call_node->children;
+  int args_count = count_list(call_id_list);
+  if (call_identifier == NULL || call_node == NULL) {
+    return NULL;
+  }
+
+  struct symbol_list *curr_symbol = symbol_table;
+  while (curr_symbol != NULL) {
+    if (strcmp(curr_symbol->identifier, call_identifier) == 0) {
+      struct node *curr_node = curr_symbol->node;
+      struct node *params = getchild(getchild(curr_node, 0), 2);
+      struct node_list *parameters_list = params->children;
+      int method_params_count = count_list(parameters_list);
+      if (args_count == method_params_count) {
+        bool match = true;
+        for (int i = 0; i < args_count; i++) {
+          struct node *id = getchild(call_node, i + 1);
+          category param_category = getchild(getchild(params, i), 0)->category;
+
+          enum type param_type = category_type(param_category);
+          enum type call_id_type = id->type;
+
+          if (!(param_type == call_id_type)) {
+            match = false;
+            break;
+          }
+        }
+        if (match) {
+          return curr_symbol;
+        }
+      }
+    }
+    curr_symbol = curr_symbol->next;
+  }
+  return NULL;
+}
+
 void check_var_decl(struct node *var_decl, struct symbol_list *local_table) {
   struct node *type = getchild(var_decl, 0);
   enum type nodes_type = category_type(type->category);
