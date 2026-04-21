@@ -146,7 +146,7 @@ void check_expression(struct node *expr, struct symbol_list *local_scope) {
   case Decimal:
     expr->type = double_type;
     break;
-  case Boollit:
+  case BoolLit:
     expr->type = boolean_type;
     break;
   case Identifier: {
@@ -441,6 +441,16 @@ int check_program(struct node *program) {
 
   symbol_table = (struct symbol_list *)malloc(sizeof(struct symbol_list));
   symbol_table->next = NULL;
+  if (class_id != NULL && class_id->token != NULL) {
+    symbol_table->identifier = strdup(class_id->token);
+  } else {
+    symbol_table->identifier =
+        strdup("ErroNomeClasse"); 
+
+    printf("DEBUG CRÍTICO: class_id é NULL? %s | Categoria do nó: %d\n",
+           class_id == NULL ? "SIM" : "NÃO",
+           class_id != NULL ? class_id->category : -1);
+  }
   symbol_table->identifier = strdup(class_id->token);
   struct node_list *child = program->children;
   while ((child = child->next) != NULL) {
@@ -514,7 +524,7 @@ enum type category_type(category c) {
     return double_type;
 
   case Bool:
-  case Boollit:
+  case BoolLit:
     return boolean_type;
 
   case StringArray:

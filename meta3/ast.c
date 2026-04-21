@@ -50,7 +50,6 @@ void show(struct node *node, int depth) {
   if (node == NULL) {
     return;
   }
-  extern int annotated_ast;
 
   for (int i = 0; i < depth; i++) {
     printf("..");
@@ -60,14 +59,10 @@ void show(struct node *node, int depth) {
 
   if (node->token != NULL) {
     if (node->category == StrLit) {
-      printf("(\"%s\")", node->token);
+      printf("(\"%s\")", node->token); // Add escaped quotes for StrLit
     } else {
       printf("(%s)", node->token);
     }
-  }
-
-  if (annotated_ast && node->type != no_type) {
-    printf(" - %s", type_name(node->type));
   }
 
   printf("\n");
@@ -77,6 +72,18 @@ void show(struct node *node, int depth) {
     show(childrens->node, depth + 1);
     childrens = childrens->next;
   }
+}
+
+struct node *getchild(struct node *parent, int position) {
+  if (parent == NULL) {
+    return NULL;
+  }
+
+  struct node_list *children = parent->children;
+  while ((children = children->next) != NULL)
+    if (position-- == 0)
+      return children->node;
+  return NULL;
 }
 
 struct node_list *newlist(struct node *n) {
@@ -118,10 +125,19 @@ void addchildren(struct node *parent, struct node_list *list) {
 void yyerror(const char *s) {
   /* Using your existing line and collumn variables */
   extern int line, collumn;
+  extern char *string_buffer;
+  extern int start_string_column;
   extern char *yytext;
+  extern int has_errors;
+  has_errors = 1;
 
-  printf("Line %d, col %d: %s: %s\n", line, (int)(collumn - strlen(yytext)), s,
-         yytext);
+  if (yytext[0] == '"' && strlen(yytext) == 1) {
+    printf("Line %d, col %d: %s: \"%s\"\n", line, start_string_column, s,
+           string_buffer);
+  } else {
+    printf("Line %d, col %d: %s: %s\n", line, (int)(collumn - strlen(yytext)),
+           s, yytext);
+  }
 }
 
 struct node *copy_node(struct node *n) {
@@ -173,18 +189,6 @@ int count_list(struct node_list *list) {
   }
 
   return count;
-}
-
-struct node *getchild(struct node *parent, int position) {
-  if (parent == NULL) {
-    return NULL;
-  }
-
-  struct node_list *children = parent->children;
-  while ((children = children->next) != NULL)
-    if (position-- == 0)
-      return children->node;
-  return NULL;
 }
 
 void free_ast(struct node *n) {

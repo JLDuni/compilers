@@ -6,9 +6,10 @@
 
   int lex_only = 0;
   int show_ast = 0;
-  int run_semantics = 0;
+  int run_semantics = 1;
   int collumn = 1;
   int line = 1;
+  int has_errors = 0;
   int annotated_ast = 0;
   char *string_buffer = NULL;
   bool error = false;
@@ -203,7 +204,7 @@ int main(int argc, char *argv[]) {
     } else if (strcmp(argv[1], "-e2") == 0) {
       print_error = 1;
       run_semantics = 0;
-    } else if (if strcmp(argv[1], "-s") == 0) {
+    } else if (strcmp(argv[1], "-s") == 0) {
       run_semantics = 1;
       print_error = 1;
       annotated_ast = 1;
@@ -216,8 +217,10 @@ int main(int argc, char *argv[]) {
     yyparse();
     if (run_semantics) {
       check_program(ast);
+      show(ast, 0);
       if(annotated_ast) print_tables(ast);
-      show(ast);
+    } else if(show_ast && has_errors == 0) {
+      show(ast, 0);
     }
   }
 

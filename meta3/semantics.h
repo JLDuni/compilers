@@ -35,5 +35,5 @@ bool is_reserved_underscore(struct node *id_node);
 char *clean_token_underscores(char *token);
 
 struct symbol_list *find_correspondent_method(char *method_identifier, struct node *call, int *compatible_count);
-
+void print_tables(struct node *program);
 #endif

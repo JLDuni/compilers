@@ -3,56 +3,56 @@
 #include <string.h>
 
 typedef enum {
-  Program,
+    Program,            
 
-  FieldDecl,
-  VarDecl,
-  MethodDecl,
-  MethodHeader,
-  MethodParams,
-  ParamDecl,
-  MethodBody,
+    FieldDecl,          
+    VarDecl,            
+    MethodDecl,         
+    MethodHeader,       
+    MethodParams,       
+    ParamDecl,          
+    MethodBody,         
 
-  Block,
-  If,
-  While,
-  Return,
-  Print,
+    Block,              
+    If,                 
+    While,              
+    Return,             
+    Print,              
 
-  Assign,
-  Or,
-  And,
-  Eq,
-  Ne,
-  Lt,
-  Gt,
-  Le,
-  Ge,
-  Add,
-  Sub,
-  Mul,
-  Div,
-  Mod,
-  Lshift,
-  Rshift,
-  Xor,
-  Not,
-  Minus,
-  Plus,
-  Length,
-  Call,
-  ParseArgs,
+    Assign,             
+    Or,                 
+    And,                
+    Eq,                 
+    Ne,                 
+    Lt,                 
+    Gt,                 
+    Le,                 
+    Ge,                 
+    Add,                
+    Sub,                
+    Mul,                
+    Div,                
+    Mod,                
+    Lshift,             
+    Rshift,             
+    Xor,                
+    Not,                
+    Minus,              
+    Plus,               
+    Length,             
+    Call,               
+    ParseArgs,          
 
-  Bool,
-  Boollit,
-  Double,
-  Decimal,
-  Identifier,
-  Int,
-  Natural,
-  StrLit,
-  StringArray,
-  Void
+    Bool,               
+    BoolLit,            
+    Double,             
+    Decimal,            
+    Identifier,         
+    Int,                
+    Natural,            
+    StrLit,             
+    StringArray,        
+    Void                
 } category;
 
 enum type {
@@ -64,9 +64,6 @@ enum type {
   void_type,
   undef_type
 };
-
-#define type_name(type)                                                        \
-  (type == integer_type ? "integer" : (type == double_type ? "double" : "none"))
 
 struct node {
   category category;
@@ -89,9 +86,9 @@ void show(struct node *node, int depth);
 struct node_list *newlist(struct node *n);
 struct node_list *append(struct node_list *list, struct node *n);
 void addchildren(struct node *parent, struct node_list *list);
+struct node *getchild(struct node *parent, int position);
 struct node *copy_node(struct node *n);
 int count_list(struct node_list *list);
-struct node *getchild(struct node *parent, int position);
 
 struct node_list *copy_list(struct node_list *list);
 
