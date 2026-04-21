@@ -1,6 +1,8 @@
 #include "ast.h"
+#include "semantics.h"
 #include <stdio.h>
 #include <stdlib.h>
+
 
 const char *node_names[] = {
     "Program",      "FieldDecl", "VarDecl",    "MethodDecl", "MethodHeader",
@@ -51,6 +53,8 @@ void show(struct node *node, int depth) {
     return;
   }
 
+  extern int annotated_ast;
+
   for (int i = 0; i < depth; i++) {
     printf("..");
   }
@@ -59,10 +63,14 @@ void show(struct node *node, int depth) {
 
   if (node->token != NULL) {
     if (node->category == StrLit) {
-      printf("(\"%s\")", node->token); // Add escaped quotes for StrLit
+      printf("(\"%s\")", node->token); 
     } else {
       printf("(%s)", node->token);
     }
+  }
+
+  if (annotated_ast && node->type != no_type) {
+    printf(" - %s", type_to_string(node->type));
   }
 
   printf("\n");

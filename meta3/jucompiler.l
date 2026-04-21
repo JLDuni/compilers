@@ -216,8 +216,8 @@ int main(int argc, char *argv[]) {
     yyparse();
     if (run_semantics) {
       check_program(ast);
-      show(ast, 0);
       if(annotated_ast) print_tables(ast);
+      show(ast, 0);
     } else if(show_ast && has_errors == 0) {
       show(ast, 0);
     }

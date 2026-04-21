@@ -236,7 +236,7 @@ TypeList: Type IDENTIFIER { struct node *param_declaration = CREATE_NODE(ParamDe
 
             ;
 
-Assignment: IDENTIFIER ASSIGN Expr               { $$ = CREATE_NODE(Assign, NULL, @$); 
+Assignment: IDENTIFIER ASSIGN Expr               { $$ = CREATE_NODE(Assign, NULL, @2); 
                                                     struct node_list *list = newlist(CREATE_NODE(Identifier, $1, @1)); 
                                                     append(list, $3); 
                                                     addchildren($$, list); }
@@ -254,22 +254,22 @@ ParseArgs: PARSEINT LPAR IDENTIFIER LSQ Expr RSQ RPAR     { $$ = CREATE_NODE(Par
 Expr: Assignment        { $$ = $1; }
     | OperationExpr     { $$ = $1; }
 
-OperationExpr: OperationExpr PLUS OperationExpr    { $$ = CREATE_NODE(Add, NULL, @$); addchildren($$, append(newlist($1), $3)); }
-    | OperationExpr MINUS OperationExpr   { $$ = CREATE_NODE(Sub, NULL, @$); addchildren($$, append(newlist($1), $3)); }
-    | OperationExpr STAR OperationExpr    { $$ = CREATE_NODE(Mul, NULL, @$); addchildren($$, append(newlist($1), $3)); }
-    | OperationExpr DIV OperationExpr     { $$ = CREATE_NODE(Div, NULL, @$); addchildren($$, append(newlist($1), $3)); }
-    | OperationExpr MOD OperationExpr     { $$ = CREATE_NODE(Mod, NULL, @$); addchildren($$, append(newlist($1), $3)); }
-    | OperationExpr AND OperationExpr     { $$ = CREATE_NODE(And, NULL, @$); addchildren($$, append(newlist($1), $3)); }
-    | OperationExpr OR OperationExpr      { $$ = CREATE_NODE(Or, NULL, @$);  addchildren($$, append(newlist($1), $3)); }
-    | OperationExpr XOR OperationExpr     { $$ = CREATE_NODE(Xor, NULL, @$); addchildren($$, append(newlist($1), $3)); }
-    | OperationExpr LSHIFT OperationExpr  { $$ = CREATE_NODE(Lshift, NULL, @$); addchildren($$, append(newlist($1), $3)); }
-    | OperationExpr RSHIFT OperationExpr  { $$ = CREATE_NODE(Rshift, NULL, @$); addchildren($$, append(newlist($1), $3)); }
-    | OperationExpr EQ OperationExpr      { $$ = CREATE_NODE(Eq, NULL, @$);  addchildren($$, append(newlist($1), $3)); }
-    | OperationExpr NE OperationExpr      { $$ = CREATE_NODE(Ne, NULL, @$);  addchildren($$, append(newlist($1), $3)); }
-    | OperationExpr GE OperationExpr      { $$ = CREATE_NODE(Ge, NULL, @$);  addchildren($$, append(newlist($1), $3)); }
-    | OperationExpr GT OperationExpr      { $$ = CREATE_NODE(Gt, NULL, @$);  addchildren($$, append(newlist($1), $3)); }
-    | OperationExpr LE OperationExpr      { $$ = CREATE_NODE(Le, NULL, @$);  addchildren($$, append(newlist($1), $3)); }
-    | OperationExpr LT OperationExpr      { $$ = CREATE_NODE(Lt, NULL, @$);  addchildren($$, append(newlist($1), $3)); }
+OperationExpr: OperationExpr PLUS OperationExpr    { $$ = CREATE_NODE(Add, NULL, @2); addchildren($$, append(newlist($1), $3)); }
+    | OperationExpr MINUS OperationExpr   { $$ = CREATE_NODE(Sub, NULL, @2); addchildren($$, append(newlist($1), $3)); }
+    | OperationExpr STAR OperationExpr    { $$ = CREATE_NODE(Mul, NULL, @2); addchildren($$, append(newlist($1), $3)); }
+    | OperationExpr DIV OperationExpr     { $$ = CREATE_NODE(Div, NULL, @2); addchildren($$, append(newlist($1), $3)); }
+    | OperationExpr MOD OperationExpr     { $$ = CREATE_NODE(Mod, NULL, @2); addchildren($$, append(newlist($1), $3)); }
+    | OperationExpr AND OperationExpr     { $$ = CREATE_NODE(And, NULL, @2); addchildren($$, append(newlist($1), $3)); }
+    | OperationExpr OR OperationExpr      { $$ = CREATE_NODE(Or, NULL, @2);  addchildren($$, append(newlist($1), $3)); }
+    | OperationExpr XOR OperationExpr     { $$ = CREATE_NODE(Xor, NULL, @2); addchildren($$, append(newlist($1), $3)); }
+    | OperationExpr LSHIFT OperationExpr  { $$ = CREATE_NODE(Lshift, NULL, @2); addchildren($$, append(newlist($1), $3)); }
+    | OperationExpr RSHIFT OperationExpr  { $$ = CREATE_NODE(Rshift, NULL, @2); addchildren($$, append(newlist($1), $3)); }
+    | OperationExpr EQ OperationExpr      { $$ = CREATE_NODE(Eq, NULL, @2);  addchildren($$, append(newlist($1), $3)); }
+    | OperationExpr NE OperationExpr      { $$ = CREATE_NODE(Ne, NULL, @2);  addchildren($$, append(newlist($1), $3)); }
+    | OperationExpr GE OperationExpr      { $$ = CREATE_NODE(Ge, NULL, @2);  addchildren($$, append(newlist($1), $3)); }
+    | OperationExpr GT OperationExpr      { $$ = CREATE_NODE(Gt, NULL, @2);  addchildren($$, append(newlist($1), $3)); }
+    | OperationExpr LE OperationExpr      { $$ = CREATE_NODE(Le, NULL, @2);  addchildren($$, append(newlist($1), $3)); }
+    | OperationExpr LT OperationExpr      { $$ = CREATE_NODE(Lt, NULL, @2);  addchildren($$, append(newlist($1), $3)); }
 
     | MINUS OperationExpr %prec UNARY_MINUS { $$ = CREATE_NODE(Minus, NULL, @$); addchild($$, $2); }
     | PLUS OperationExpr %prec UNARY_PLUS   { $$ = CREATE_NODE(Plus, NULL, @$);  addchild($$, $2); }

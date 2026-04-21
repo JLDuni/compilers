@@ -68,7 +68,7 @@ void check_statement(struct node *statement_body,
   switch (statement_body->category) {
   case If:
     if (expression->type != undef_type && expression->type != boolean_type) {
-      printf("Line %d, Column %d: Incompatible type %s in %s statement\n",
+      printf("Line %d, Column %d: Incompatible type %s in %s statement",
              expression->line, expression->column,
              type_to_string(expression->type), expression->token);
       semantic_errors++;
@@ -79,7 +79,7 @@ void check_statement(struct node *statement_body,
     break;
   case While:
     if (expression->type != undef_type && expression->type != boolean_type) {
-      printf("Line %d, Column %d: Incompatible type %s in %s statement\n",
+      printf("Line %d, Column %d: Incompatible type %s in %s statement",
              expression->line, expression->column,
              type_to_string(expression->type), expression->token);
       semantic_errors++;
@@ -127,11 +127,6 @@ void check_expression(struct node *expr, struct symbol_list *local_scope) {
     return;
   struct node_list *child_ptr =
       (expr->children != NULL) ? expr->children->next : NULL;
-
-  if ((expr->category == Call || expr->category == ParseArgs) &&
-      child_ptr != NULL) {
-    child_ptr = child_ptr->next;
-  }
   while (child_ptr != NULL) {
     check_expression(child_ptr->node, local_scope);
     child_ptr = child_ptr->next;
@@ -161,7 +156,7 @@ void check_expression(struct node *expr, struct symbol_list *local_scope) {
     } else {
       printf("Line %d, col %d: Cannot find symbol %s\n", expr->line,
              expr->column, expr->token);
-      expr->type = undef_type;
+      expr->type = void_type;
       semantic_errors++;
     }
     break;
@@ -176,8 +171,7 @@ void check_expression(struct node *expr, struct symbol_list *local_scope) {
       expr->type = t;
     } else if (t != undef_type) {
       printf("Line %d, col %d: Operator %s cannot be applied to type %s\n",
-             expr->line, expr->column, get_symbol_category(expr->category),
-             type_to_string(t));
+             expr->line, expr->column, expr->token, type_to_string(t));
       expr->type = undef_type;
       semantic_errors++;
     } else {
@@ -217,9 +211,9 @@ void check_expression(struct node *expr, struct symbol_list *local_scope) {
           (t1 == double_type || t2 == double_type) ? double_type : integer_type;
     } else {
       printf("Line %d, col %d: Operator %s cannot be applied to types %s, %s\n",
-             expr->line, expr->column, get_symbol_category(expr->category),
-             type_to_string(t1), type_to_string(t2));
-      expr->type = undef_type;
+             expr->line, expr->column, expr->token, type_to_string(t1),
+             type_to_string(t2));
+      expr->type = void_type;
       semantic_errors++;
     }
     break;
@@ -239,8 +233,8 @@ void check_expression(struct node *expr, struct symbol_list *local_scope) {
     if (!((t1 == t2) || ((t1 == integer_type || t1 == double_type) &&
                          (t2 == integer_type || t2 == double_type)))) {
       printf("Line %d, col %d: Operator %s cannot be applied to types %s, %s\n",
-             expr->line, expr->column, get_symbol_category(expr->category),
-             type_to_string(t1), type_to_string(t2));
+             expr->line, expr->column, expr->token, type_to_string(t1),
+             type_to_string(t2));
     }
     break;
   }
@@ -300,55 +294,8 @@ void check_expression(struct node *expr, struct symbol_list *local_scope) {
   }
 
   default:
-    expr->type = undef_type;
+    expr->type = void_type;
     break;
-  }
-}
-
-char *get_symbol_category(category cat) {
-  switch (cat) {
-  case Assign:
-    return "=";
-  case Or:
-    return "||";
-  case And:
-    return "&&";
-  case Eq:
-    return "==";
-  case Ne:
-    return "!=";
-  case Lt:
-    return "<";
-  case Gt:
-    return ">";
-  case Le:
-    return "<=";
-  case Ge:
-    return ">=";
-  case Add:
-    return "+";
-  case Sub:
-    return "-";
-  case Mul:
-    return "*";
-  case Div:
-    return "/";
-  case Mod:
-    return "%";
-  case Lshift:
-    return "<<";
-  case Rshift:
-    return ">>";
-  case Xor:
-    return "^";
-  case Not:
-    return "!";
-  case Minus:
-    return "-"; // Unário
-  case Plus:
-    return "+"; // Unário
-  default:
-    return ""; // Retorno de segurança para não dar (null)
   }
 }
 
@@ -356,7 +303,7 @@ struct symbol_list *find_correspondent_method(char *call_identifier,
                                               struct node *call_node,
                                               int *compatible_count) {
   struct node_list *call_id_list = call_node->children;
-  int args_count = count_list(call_id_list) - 2;
+  int args_count = count_list(call_id_list) - 1;
   if (call_identifier == NULL || call_node == NULL) {
     return NULL;
   }
@@ -368,7 +315,7 @@ struct symbol_list *find_correspondent_method(char *call_identifier,
       struct node *curr_node = curr_symbol->node;
       struct node *params = getchild(getchild(curr_node, 0), 2);
       struct node_list *parameters_list = params->children;
-      int method_params_count = count_list(parameters_list) - 1;
+      int method_params_count = count_list(parameters_list);
       if (args_count == method_params_count) {
         bool exact_match = true;
         bool compatible_match = true;
@@ -459,9 +406,7 @@ void check_parameters(struct node *parameters,
           return;
         } else {
           enum type p_type = category_type(type->category);
-          struct symbol_list *new_symbol =
-              insert_symbol(scope_table, id->token, p_type, type);
-          new_symbol->is_parameter = 1;
+          insert_symbol(scope_table, id->token, p_type, type);
         }
       }
     }
@@ -603,13 +548,7 @@ void print_tables(struct node *program) {
   printf("===== Class %s Symbol Table =====\n", symbol_table->identifier);
   struct symbol_list *s = symbol_table->next;
   while (s != NULL) {
-    if (s->node != NULL && s->node->category == MethodDecl) {
-      printf("%s\t", s->identifier);
-      print_method_params(s->node);
-      printf("\t%s\n", type_to_string(s->type));
-    } else {
-      printf("%s\t\t%s\n", s->identifier, type_to_string(s->type));
-    }
+    printf("%s\t%s\t%s\n", s->identifier, "(...)", type_to_string(s->type));
     s = s->next;
   }
   printf("\n");
@@ -619,10 +558,7 @@ void print_tables(struct node *program) {
     if (child->node->category == MethodDecl) {
       struct node *header = getchild(child->node, 0);
       char *m_name = getchild(header, 1)->token;
-
-      printf("===== Method %s", m_name);
-      print_method_params(child->node);
-      printf(" Symbol Table =====\n");
+      printf("===== Method %s(...) Symbol Table =====\n", m_name);
 
       struct symbol_list *local = child->node->local_symbols;
       struct symbol_list *ls = local->next;
@@ -635,33 +571,4 @@ void print_tables(struct node *program) {
     }
     child = child->next;
   }
-}
-
-void print_method_params(struct node *method_decl) {
-  printf("(");
-  struct node *method_header = getchild(method_decl, 0);
-  struct node *params = getchild(method_header, 2);
-
-  if (params != NULL && params->children != NULL &&
-      params->children->next != NULL) {
-
-    struct node_list *curr_param = params->children->next;
-
-    while (curr_param != NULL) {
-      struct node *param_decl = curr_param->node;
-
-      if (param_decl != NULL) {
-        struct node *type_node = getchild(param_decl, 0);
-        if (type_node != NULL) {
-          printf("%s", type_to_string(category_type(type_node->category)));
-        }
-      }
-
-      if (curr_param->next != NULL) {
-        printf(",");
-      }
-      curr_param = curr_param->next;
-    }
-  }
-  printf(")");
 }
