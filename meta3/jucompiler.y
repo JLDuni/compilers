@@ -47,8 +47,6 @@ struct node *ast;
 %nonassoc IF_PREC
 %nonassoc ELSE
 
-
-
 /* START grammar rules section -- BNF grammar */
 
 %%

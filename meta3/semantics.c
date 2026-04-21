@@ -162,6 +162,41 @@ void check_expression(struct node *expr, struct symbol_list *local_scope) {
     break;
   }
 
+  case Minus:
+  case Plus: {
+    struct node *child = getchild(expr, 0);
+    enum type t = child->type;
+
+    if (t == integer_type || t == double_type) {
+      expr->type = t;
+    } else if (t != undef_type) {
+      printf("Line %d, col %d: Operator %s cannot be applied to type %s\n",
+             expr->line, expr->column, expr->token, type_to_string(t));
+      expr->type = undef_type;
+      semantic_errors++;
+    } else {
+      expr->type = undef_type;
+    }
+    break;
+  }
+
+  case Not: {
+    struct node *child = getchild(expr, 0);
+    enum type t = child->type;
+
+    if (t == boolean_type) {
+      expr->type = boolean_type;
+    } else if (t != undef_type) {
+      printf("Line %d, col %d: Operator ! cannot be applied to type %s\n",
+             expr->line, expr->column, type_to_string(t));
+      expr->type = undef_type;
+      semantic_errors++;
+    } else {
+      expr->type = undef_type;
+    }
+    break;
+  }
+
   case Add:
   case Sub:
   case Mul:
@@ -222,14 +257,25 @@ void check_expression(struct node *expr, struct symbol_list *local_scope) {
 
   case Call: {
     struct node *id_node = getchild(expr, 0);
-    struct symbol_list *sym = search_symbol(symbol_table, id_node->token);
-    if (sym != NULL) {
-      expr->type = sym->type;
-    } else {
+    int compatible_count_methods = 0;
+    struct symbol_list *sym = find_correspondent_method(
+        id_node->token, expr, &compatible_count_methods);
+
+    if (compatible_count_methods > 1) {
+      printf("Line %d, Column %d: Reference to method %s is ambiguous",
+             id_node->line, id_node->column, id_node->token);
+      expr->type = undef_type;
+      id_node->type = undef_type;
+      semantic_errors++;
+    } else if (sym == NULL) {
       printf("Line %d, col %d: Cannot find symbol %s\n", id_node->line,
              id_node->column, id_node->token);
-      expr->type = void_type;
+      expr->type = undef_type;
+      id_node->type = undef_type;
       semantic_errors++;
+    } else {
+      expr->type = sym->type;
+      id_node->type = sym->type;
     }
     break;
   }
@@ -255,12 +301,14 @@ void check_expression(struct node *expr, struct symbol_list *local_scope) {
 }
 
 struct symbol_list *find_correspondent_method(char *call_identifier,
-                                              struct node *call_node) {
+                                              struct node *call_node,
+                                              int *compatible_count) {
   struct node_list *call_id_list = call_node->children;
-  int args_count = count_list(call_id_list);
+  int args_count = count_list(call_id_list) - 1;
   if (call_identifier == NULL || call_node == NULL) {
     return NULL;
   }
+  struct symbol_list *best_match = NULL;
 
   struct symbol_list *curr_symbol = symbol_table;
   while (curr_symbol != NULL) {
@@ -270,7 +318,8 @@ struct symbol_list *find_correspondent_method(char *call_identifier,
       struct node_list *parameters_list = params->children;
       int method_params_count = count_list(parameters_list);
       if (args_count == method_params_count) {
-        bool match = true;
+        bool exact_match = true;
+        bool compatible_match = true;
         for (int i = 0; i < args_count; i++) {
           struct node *id = getchild(call_node, i + 1);
           category param_category = getchild(getchild(params, i), 0)->category;
@@ -278,19 +327,27 @@ struct symbol_list *find_correspondent_method(char *call_identifier,
           enum type param_type = category_type(param_category);
           enum type call_id_type = id->type;
 
-          if (!(param_type == call_id_type)) {
-            match = false;
-            break;
+          if (param_type != call_id_type) {
+            exact_match = false;
+            if (!(param_type == double_type && call_id_type == integer_type)) {
+              compatible_match = false;
+              break;
+            }
           }
         }
-        if (match) {
+        if (exact_match) {
           return curr_symbol;
+        }
+
+        if (compatible_match) {
+          best_match = curr_symbol;
+          (*compatible_count)++;
         }
       }
     }
     curr_symbol = curr_symbol->next;
   }
-  return NULL;
+  return best_match;
 }
 
 void check_var_decl(struct node *var_decl, struct symbol_list *local_table) {
