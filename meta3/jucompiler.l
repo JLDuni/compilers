@@ -2,12 +2,14 @@
   #include <string.h>
   #include "y.tab.h"  
   #include "ast.h"
+  #include "semantics.h"
 
   int lex_only = 0;
   int show_ast = 0;
-  int has_errors = 0;
+  int run_semantics = 0;
   int collumn = 1;
   int line = 1;
+  int annotated_ast = 0;
   char *string_buffer = NULL;
   bool error = false;
   bool print_tokens = false;
@@ -56,6 +58,7 @@
   #define PRINT_ERROR(fmt, ...) if(print_tokens || print_error) printf(fmt , ##__VA_ARGS__)
 
   # define YY_USER_ACTION \
+    yylloc.first_line = lex_line; yylloc.first_column = lex_column; yylloc.last_column = lex_column + yyleng; yylloc.last_line = lex_line; \
     collumn += yyleng;
 
 %}
@@ -188,27 +191,35 @@ int main(int argc, char *argv[]) {
     if (strcmp(argv[1], "-l") == 0) {
       print_tokens = 1;
       lex_only = 1;
+      run_semantics = 0;
     } else if (strcmp(argv[1], "-e1") == 0) {
-        lex_only = 1;
-        print_tokens = 0;
-        print_error = 1;
+      lex_only = 1;
+      print_error = 1;
+      run_semantics = 0;
     } else if (strcmp(argv[1], "-t") == 0) {
-        show_ast = 1;
-        print_error = 1;
+      show_ast = 1;
+      print_error = 1;
+      run_semantics = 0;
     } else if (strcmp(argv[1], "-e2") == 0) {
-        show_ast = 0; 
-        print_error = 1;
-      }
+      print_error = 1;
+      run_semantics = 0;
+    } else if (if strcmp(argv[1], "-s") == 0) {
+      run_semantics = 1;
+      print_error = 1;
+      annotated_ast = 1;
     }
+  }
 
-    if (lex_only) {
-      while(yylex() != 0);
-    } else {
-      yyparse();
-      if (show_ast && has_errors == 0) {
-        show(ast, 0); 
-      }
+  if (lex_only) {
+    while(yylex() != 0);
+  } else {
+    yyparse();
+    if (run_semantics) {
+      check_program(ast);
+      if(annotated_ast) print_tables(ast);
+      show(ast);
     }
+  }
 
   if (ast != NULL) {
     free_ast(ast);

@@ -15,7 +15,7 @@ const char *node_names[] = {
     "Void"};
 
 // create a node of a given category with a given lexical symbol
-struct node *newnode(category category, char *token) {
+struct node *newnode(category category, char *token, int line, int column) {
   struct node *new = malloc(sizeof(struct node));
   if (new == NULL)
     return new;
@@ -25,6 +25,8 @@ struct node *newnode(category category, char *token) {
   new->children = malloc(sizeof(struct node_list));
   if (new->children == NULL)
     return new;
+  new->line = line;
+  new->column = column;
 
   new->children->node = NULL;
   new->children->next = NULL;
@@ -48,6 +50,7 @@ void show(struct node *node, int depth) {
   if (node == NULL) {
     return;
   }
+  extern int annotated_ast;
 
   for (int i = 0; i < depth; i++) {
     printf("..");
@@ -57,10 +60,14 @@ void show(struct node *node, int depth) {
 
   if (node->token != NULL) {
     if (node->category == StrLit) {
-      printf("(\"%s\")", node->token); // Add escaped quotes for StrLit
+      printf("(\"%s\")", node->token);
     } else {
       printf("(%s)", node->token);
     }
+  }
+
+  if (annotated_ast && node->type != no_type) {
+    printf(" - %s", type_name(node->type));
   }
 
   printf("\n");

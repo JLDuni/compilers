@@ -56,6 +56,7 @@ typedef enum {
 } category;
 
 enum type {
+  no_type,
   integer_type,
   double_type,
   boolean_type,
@@ -82,7 +83,7 @@ struct node_list {
   struct node_list *next;
 };
 
-struct node *newnode(category category, char *token);
+struct node *newnode(category category, char *token, int line, int column);
 void addchild(struct node *parent, struct node *child);
 void show(struct node *node, int depth);
 struct node_list *newlist(struct node *n);

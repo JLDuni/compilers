@@ -241,8 +241,7 @@ void check_expression(struct node *expr, struct symbol_list *local_scope) {
 
   case And:
   case Or:
-  case Xor:
-  case Not: {
+  case Xor: {
     expr->type = boolean_type;
     break;
   }
@@ -415,7 +414,26 @@ void check_parameters(struct node *parameters,
 }
 
 void check_field_decl(struct node *field_decl,
-                      struct symbol_list *local_table) {}
+                      struct symbol_list *global_table) {
+  if (field_decl == NULL)
+    return;
+
+  struct node *type_node = getchild(field_decl, 0);
+  struct node *id_node = getchild(field_decl, 1);
+
+  enum type field_type = category_type(type_node->category);
+
+  struct symbol_list *existing_symbol =
+      search_symbol(global_table, id_node->token);
+
+  if (existing_symbol != NULL) {
+    printf("Line %d, col %d: Symbol %s already defined\n", id_node->line,
+           id_node->column, id_node->token);
+    semantic_errors++;
+  } else {
+    insert_symbol(global_table, id_node->token, field_type, NULL);
+  }
+}
 
 // semantic analysis begins here, with the AST root node
 int check_program(struct node *program) {
@@ -431,7 +449,6 @@ int check_program(struct node *program) {
     } else if (child->node->category == FieldDecl) {
       check_field_decl(child->node, symbol_table);
     }
-    child = child->next;
   }
 
   return semantic_errors;
@@ -479,8 +496,10 @@ char *type_to_string(enum type type) {
     return "String[]";
   case void_type:
     return "void";
-  default:
+  case undef_type:
     return "undef";
+  default:
+    return "";
   }
 }
 

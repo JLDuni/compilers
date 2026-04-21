@@ -10,6 +10,7 @@ void yyerror(char *);
 
 struct node *ast;
 
+#define CREATE_NODE(category, token, loc) newnode(category, token, loc.first_line, loc.first_column)
 %}
 
 %union{
@@ -19,6 +20,7 @@ struct node *ast;
 }
 
 
+%locations
 %token <lexeme> IDENTIFIER NATURAL DECIMAL STRLIT RESERVED BOOLLIT
 
 %token BOOL CLASS DOUBLE ELSE IF INT PRINT PARSEINT PUBLIC RETURN STATIC STRING VOID WHILE
@@ -49,10 +51,11 @@ struct node *ast;
 
 /* START grammar rules section -- BNF grammar */
 
+
 %%
 
-Program: CLASS IDENTIFIER LBRACE declarations RBRACE                { ast = $$ = newnode(Program, NULL);
-                                                                     struct node *identifier_node = newnode(Identifier, $2); 
+Program: CLASS IDENTIFIER LBRACE declarations RBRACE                { ast = $$ = CREATE_NODE(Program, NULL, @$);
+                                                                     struct node *identifier_node = CREATE_NODE(Identifier, $2, @2); 
                                                                      struct node_list *id_list = newlist(identifier_node); 
                                                                      id_list->next = $4;
                                                                      addchildren($$, id_list); }
@@ -69,50 +72,49 @@ declarations:     { $$ = NULL; }
                                                               } 
                                                       }
             | declarations SEMICOLON                  { $$ = $1; }
-            // | declarations error SEMICOLON            { $$ = $1; }
             ;
 
-FieldDecl: PUBLIC STATIC Type IDENTIFIER MultipleIdentifiers SEMICOLON      { struct node *decl = newnode(FieldDecl, NULL); 
+FieldDecl: PUBLIC STATIC Type IDENTIFIER MultipleIdentifiers SEMICOLON      { struct node *decl = CREATE_NODE(FieldDecl, NULL, @$); 
                                                                               addchild(decl, $3); 
-                                                                              addchild(decl, newnode(Identifier, $4)); 
+                                                                              addchild(decl, CREATE_NODE(Identifier, $4, @4)); 
 
                                                                               struct node_list *list = newlist(decl); 
-                                                              
+                                                                              
                                                                               struct node_list *curr = $5;
                                                                               while(curr != NULL) {
-                                                                                struct node *current_decl = newnode(FieldDecl, NULL);
+                                                                                struct node *current_decl = CREATE_NODE(FieldDecl, NULL, @$);
                                                                                 addchild(current_decl, copy_node($3));
                                                                                 addchild(current_decl, curr->node);
                                                                                 list = append(list, current_decl);
                                                                                 curr = curr->next;
                                                                               } 
                                                                               $$ = list; 
-                                                                              }
-         | error SEMICOLON                                                    {$$ = NULL; }
-        ;
+                                                                            }
+         | error SEMICOLON                                            {$$ = NULL; }
+         ;
 
-MethodDecl: PUBLIC STATIC MethodHeader MethodBody     { $$ = newnode(MethodDecl, NULL); 
+MethodDecl: PUBLIC STATIC MethodHeader MethodBody     { $$ = CREATE_NODE(MethodDecl, NULL, @$); 
                                                       struct node_list *list = newlist($3); 
                                                       append(list, $4);
                                                       addchildren($$, list); }
 ;
 
-MethodHeader: Type IDENTIFIER LPAR OptionalFormalParams RPAR { $$ = newnode(MethodHeader, NULL); 
+MethodHeader: Type IDENTIFIER LPAR OptionalFormalParams RPAR { $$ = CREATE_NODE(MethodHeader, NULL, @$); 
                                                       struct node_list *list = newlist($1);
-                                                      append(list, newnode(Identifier, $2)); 
+                                                      append(list, CREATE_NODE(Identifier, $2, @2)); 
                                                       list = append(list, $4); 
                                                       addchildren($$, list); }
 
-            | VOID IDENTIFIER LPAR OptionalFormalParams RPAR { $$ = newnode(MethodHeader, NULL); 
-                                                               struct node_list *list = newlist(newnode(Void, NULL)); 
-                                                               append(list, newnode(Identifier, $2)); 
+            | VOID IDENTIFIER LPAR OptionalFormalParams RPAR { $$ = CREATE_NODE(MethodHeader, NULL, @$); 
+                                                               struct node_list *list = newlist(CREATE_NODE(Void, NULL, @1)); 
+                                                               append(list, CREATE_NODE(Identifier, $2, @2)); 
                                                                append(list, $4); 
                                                                addchildren($$, list); }
 
             
             ;
 
-MethodBody: LBRACE BodyContent RBRACE     { $$ = newnode(MethodBody, NULL); 
+MethodBody: LBRACE BodyContent RBRACE     { $$ = CREATE_NODE(MethodBody, NULL, @$); 
                                             addchildren($$, $2); }
           ;
 
@@ -127,58 +129,58 @@ BodyContent:                          { $$ = NULL; }
                                         else $$ = $1; }
            ;
 
-VarDecl: Type IDENTIFIER MultipleIdentifiers SEMICOLON    { struct node *decl = newnode(VarDecl, NULL); 
-                                                              addchild(decl, $1); 
-                                                              addchild(decl, newnode(Identifier, $2)); 
-                                                              struct node_list *list = newlist(decl); 
-                                                              
-                                                              struct node_list *curr = $3;
-                                                              while(curr != NULL) {
-                                                                struct node *current_decl = newnode(VarDecl, NULL);
-                                                                addchild(current_decl, copy_node($1));
-                                                                addchild(current_decl, curr->node);
-                                                                list = append(list, current_decl);
-                                                                curr = curr->next;
-                                                              } 
-                                                              $$ = list;
-                                                              } 
+VarDecl: Type IDENTIFIER MultipleIdentifiers SEMICOLON    { struct node *decl = CREATE_NODE(VarDecl, NULL, @$); 
+                                                      addchild(decl, $1); 
+                                                      addchild(decl, CREATE_NODE(Identifier, $2, @2)); 
+                                                      struct node_list *list = newlist(decl); 
+                                                      
+                                                      struct node_list *curr = $3;
+                                                      while(curr != NULL) {
+                                                        struct node *current_decl = CREATE_NODE(VarDecl, NULL, @$);
+                                                        addchild(current_decl, copy_node($1));
+                                                        addchild(current_decl, curr->node);
+                                                        list = append(list, current_decl);
+                                                        curr = curr->next;
+                                                      } 
+                                                      $$ = list;
+                                                      } 
         ;
 
 MultipleIdentifiers: { $$ = NULL; }
-                   | MultipleIdentifiers COMMA IDENTIFIER   { $$ = append($1, newnode(Identifier, $3)); }
+                   | MultipleIdentifiers COMMA IDENTIFIER   { $$ = append($1, CREATE_NODE(Identifier, $3, @3)); }
                    ;
 
 Statement: LBRACE StatementList RBRACE      { int count = count_list($2); 
-                                              if (count > 1) {$$ = newnode(Block, NULL); addchildren($$, $2);}
+                                              if (count > 1) {$$ = CREATE_NODE(Block, NULL, @$); addchildren($$, $2);}
                                               else if (count == 1) $$ = $2->node;
                                               else{ $$ = NULL; } }
         ;
 
-Statement: IF LPAR Expr RPAR Statement %prec IF_PREC         { $$ = newnode(If, NULL); 
-                                                            addchild($$, $3); 
-                                                            addchild($$, $5 != NULL ? $5 : newnode(Block, NULL)); 
-                                                            addchild($$, newnode(Block, NULL)); }
-         | IF LPAR Expr RPAR Statement ELSE Statement     { $$ = newnode(If, NULL); 
-                                                            addchild($$, $3); 
-                                                            addchild($$, $5 != NULL ? $5 : newnode(Block, NULL)); 
-                                                            addchild($$, $7 != NULL ? $7 : newnode(Block, NULL)); }
+Statement: IF LPAR Expr RPAR Statement %prec IF_PREC         { $$ = CREATE_NODE(If, NULL, @$); 
+                                                    addchild($$, $3); 
+                                                    addchild($$, $5 != NULL ? $5 : CREATE_NODE(Block, NULL, @$)); 
+                                                    addchild($$, CREATE_NODE(Block, NULL, @$)); }
+         | IF LPAR Expr RPAR Statement ELSE Statement     { $$ = CREATE_NODE(If, NULL, @$); 
+                                                    addchild($$, $3); 
+                                                    addchild($$, $5 != NULL ? $5 : CREATE_NODE(Block, NULL, @$)); 
+                                                    addchild($$, $7 != NULL ? $7 : CREATE_NODE(Block, NULL, @$)); }
 
-         | WHILE LPAR Expr RPAR Statement                 { $$ = newnode(While, NULL); 
-                                                            addchild($$, $3); 
-                                                            addchild($$, $5 != NULL ? $5 : newnode(Block, NULL)); }
+         | WHILE LPAR Expr RPAR Statement                 { $$ = CREATE_NODE(While, NULL, @$); 
+                                                    addchild($$, $3); 
+                                                    addchild($$, $5 != NULL ? $5 : CREATE_NODE(Block, NULL, @$)); }
 
-         | RETURN SEMICOLON                               { $$ = newnode(Return, NULL); }
-         | RETURN Expr SEMICOLON                         { $$ = newnode(Return, NULL); 
-                                                            addchild($$, $2);}
+         | RETURN SEMICOLON                               { $$ = CREATE_NODE(Return, NULL, @$); }
+         | RETURN Expr SEMICOLON                         { $$ = CREATE_NODE(Return, NULL, @$); 
+                                                    addchild($$, $2);}
 
         | MethodInvocation SEMICOLON                     { $$ =  $1; }
         | Assignment SEMICOLON                     { $$ =  $1; }
         | ParseArgs SEMICOLON                     { $$ =  $1; }
-        | PRINT LPAR Expr RPAR SEMICOLON           { $$ = newnode(Print, NULL); 
+        | PRINT LPAR Expr RPAR SEMICOLON           { $$ = CREATE_NODE(Print, NULL, @$); 
                                                       addchild($$, $3); }
 
-        | PRINT LPAR STRLIT RPAR SEMICOLON           { $$ = newnode(Print, NULL); 
-                                                      addchild($$, newnode(StrLit, $3)); }
+        | PRINT LPAR STRLIT RPAR SEMICOLON           { $$ = CREATE_NODE(Print, NULL, @$); 
+                                                      addchild($$, CREATE_NODE(StrLit, $3, @3)); }
         | error SEMICOLON                             { $$ = NULL; }
         | SEMICOLON                                   { $$ = NULL; }
         ;
@@ -188,8 +190,8 @@ StatementList:          { $$ = NULL; }
                                             else $$ = $1; }
              ;
 
-MethodInvocation: IDENTIFIER LPAR ArgsList RPAR     { $$ = newnode(Call, NULL); 
-                                                      struct node *id_node = newnode(Identifier, $1); 
+MethodInvocation: IDENTIFIER LPAR ArgsList RPAR     { $$ = CREATE_NODE(Call, NULL, @$); 
+                                                      struct node *id_node = CREATE_NODE(Identifier, $1, @1); 
                                                       struct node_list *list = newlist(id_node); 
                                                       list->next = $3;
                                                       addchildren($$, list); 
@@ -206,43 +208,43 @@ NonEmptyArgsList: Expr      { $$ = newlist($1); }
                 | NonEmptyArgsList COMMA Expr     { $$ = append($1, $3); }
                 ;
 
-OptionalFormalParams:                 { $$ = newnode(MethodParams, NULL); }
-                    | FormalParams    { $$ = newnode(MethodParams, NULL); 
+OptionalFormalParams:                 { $$ = CREATE_NODE(MethodParams, NULL, @$); }
+                    | FormalParams    { $$ = CREATE_NODE(MethodParams, NULL, @$); 
                                       addchildren($$, $1); }
                     ;
          
 FormalParams: TypeList                              { $$ = $1; }             
-            | STRING LSQ RSQ IDENTIFIER            { struct node *param_declaration = newnode(ParamDecl, NULL); 
-                                                     struct node_list *children = newlist(newnode(StringArray, NULL)); 
-                                                     append(children, newnode(Identifier, $4)); 
+            | STRING LSQ RSQ IDENTIFIER            { struct node *param_declaration = CREATE_NODE(ParamDecl, NULL, @$); 
+                                                     struct node_list *children = newlist(CREATE_NODE(StringArray, NULL, @1)); 
+                                                     append(children, CREATE_NODE(Identifier, $4, @4)); 
                                                      addchildren(param_declaration, children); 
                                                      $$ = newlist(param_declaration); }
 
             ;
 
-TypeList: Type IDENTIFIER { struct node *param_declaration = newnode(ParamDecl, NULL); 
+TypeList: Type IDENTIFIER { struct node *param_declaration = CREATE_NODE(ParamDecl, NULL, @$); 
                                 struct node_list *children = newlist($1); 
-                                append(children, newnode(Identifier, $2));
+                                append(children, CREATE_NODE(Identifier, $2, @2));
                                 addchildren(param_declaration, children); 
                                 $$ = newlist(param_declaration);
                                 }
-            | TypeList COMMA Type IDENTIFIER   { struct node *param_declaration = newnode(ParamDecl, NULL); 
+            | TypeList COMMA Type IDENTIFIER   { struct node *param_declaration = CREATE_NODE(ParamDecl, NULL, @$); 
                                                      struct node_list *children = newlist($3); 
-                                                     append(children, newnode(Identifier, $4)); 
+                                                     append(children, CREATE_NODE(Identifier, $4, @4)); 
                                                      addchildren(param_declaration, children); 
                                                      $$ = append($1, param_declaration); }
 
             ;
 
-Assignment: IDENTIFIER ASSIGN Expr               { $$ = newnode(Assign, NULL); 
-                                                    struct node_list *list = newlist(newnode(Identifier, $1)); 
+Assignment: IDENTIFIER ASSIGN Expr               { $$ = CREATE_NODE(Assign, NULL, @$); 
+                                                    struct node_list *list = newlist(CREATE_NODE(Identifier, $1, @1)); 
                                                     append(list, $3); 
                                                     addchildren($$, list); }
            ;
             
 
-ParseArgs: PARSEINT LPAR IDENTIFIER LSQ Expr RSQ RPAR     { $$ = newnode(ParseArgs, NULL); 
-                                                          struct node_list *list = newlist(newnode(Identifier, $3)); 
+ParseArgs: PARSEINT LPAR IDENTIFIER LSQ Expr RSQ RPAR     { $$ = CREATE_NODE(ParseArgs, NULL, @$); 
+                                                          struct node_list *list = newlist(CREATE_NODE(Identifier, $3, @3)); 
                                                           append(list, $5); 
                                                           addchildren($$, list); }
 
@@ -252,40 +254,40 @@ ParseArgs: PARSEINT LPAR IDENTIFIER LSQ Expr RSQ RPAR     { $$ = newnode(ParseAr
 Expr: Assignment        { $$ = $1; }
     | OperationExpr     { $$ = $1; }
 
-OperationExpr: OperationExpr PLUS OperationExpr    { $$ = newnode(Add, NULL); addchildren($$, append(newlist($1), $3)); }
-    | OperationExpr MINUS OperationExpr   { $$ = newnode(Sub, NULL); addchildren($$, append(newlist($1), $3)); }
-    | OperationExpr STAR OperationExpr    { $$ = newnode(Mul, NULL); addchildren($$, append(newlist($1), $3)); }
-    | OperationExpr DIV OperationExpr     { $$ = newnode(Div, NULL); addchildren($$, append(newlist($1), $3)); }
-    | OperationExpr MOD OperationExpr     { $$ = newnode(Mod, NULL); addchildren($$, append(newlist($1), $3)); }
-    | OperationExpr AND OperationExpr     { $$ = newnode(And, NULL); addchildren($$, append(newlist($1), $3)); }
-    | OperationExpr OR OperationExpr      { $$ = newnode(Or, NULL);  addchildren($$, append(newlist($1), $3)); }
-    | OperationExpr XOR OperationExpr     { $$ = newnode(Xor, NULL); addchildren($$, append(newlist($1), $3)); }
-    | OperationExpr LSHIFT OperationExpr  { $$ = newnode(Lshift, NULL); addchildren($$, append(newlist($1), $3)); }
-    | OperationExpr RSHIFT OperationExpr  { $$ = newnode(Rshift, NULL); addchildren($$, append(newlist($1), $3)); }
-    | OperationExpr EQ OperationExpr      { $$ = newnode(Eq, NULL);  addchildren($$, append(newlist($1), $3)); }
-    | OperationExpr NE OperationExpr      { $$ = newnode(Ne, NULL);  addchildren($$, append(newlist($1), $3)); }
-    | OperationExpr GE OperationExpr      { $$ = newnode(Ge, NULL);  addchildren($$, append(newlist($1), $3)); }
-    | OperationExpr GT OperationExpr      { $$ = newnode(Gt, NULL);  addchildren($$, append(newlist($1), $3)); }
-    | OperationExpr LE OperationExpr      { $$ = newnode(Le, NULL);  addchildren($$, append(newlist($1), $3)); }
-    | OperationExpr LT OperationExpr      { $$ = newnode(Lt, NULL);  addchildren($$, append(newlist($1), $3)); }
+OperationExpr: OperationExpr PLUS OperationExpr    { $$ = CREATE_NODE(Add, NULL, @$); addchildren($$, append(newlist($1), $3)); }
+    | OperationExpr MINUS OperationExpr   { $$ = CREATE_NODE(Sub, NULL, @$); addchildren($$, append(newlist($1), $3)); }
+    | OperationExpr STAR OperationExpr    { $$ = CREATE_NODE(Mul, NULL, @$); addchildren($$, append(newlist($1), $3)); }
+    | OperationExpr DIV OperationExpr     { $$ = CREATE_NODE(Div, NULL, @$); addchildren($$, append(newlist($1), $3)); }
+    | OperationExpr MOD OperationExpr     { $$ = CREATE_NODE(Mod, NULL, @$); addchildren($$, append(newlist($1), $3)); }
+    | OperationExpr AND OperationExpr     { $$ = CREATE_NODE(And, NULL, @$); addchildren($$, append(newlist($1), $3)); }
+    | OperationExpr OR OperationExpr      { $$ = CREATE_NODE(Or, NULL, @$);  addchildren($$, append(newlist($1), $3)); }
+    | OperationExpr XOR OperationExpr     { $$ = CREATE_NODE(Xor, NULL, @$); addchildren($$, append(newlist($1), $3)); }
+    | OperationExpr LSHIFT OperationExpr  { $$ = CREATE_NODE(Lshift, NULL, @$); addchildren($$, append(newlist($1), $3)); }
+    | OperationExpr RSHIFT OperationExpr  { $$ = CREATE_NODE(Rshift, NULL, @$); addchildren($$, append(newlist($1), $3)); }
+    | OperationExpr EQ OperationExpr      { $$ = CREATE_NODE(Eq, NULL, @$);  addchildren($$, append(newlist($1), $3)); }
+    | OperationExpr NE OperationExpr      { $$ = CREATE_NODE(Ne, NULL, @$);  addchildren($$, append(newlist($1), $3)); }
+    | OperationExpr GE OperationExpr      { $$ = CREATE_NODE(Ge, NULL, @$);  addchildren($$, append(newlist($1), $3)); }
+    | OperationExpr GT OperationExpr      { $$ = CREATE_NODE(Gt, NULL, @$);  addchildren($$, append(newlist($1), $3)); }
+    | OperationExpr LE OperationExpr      { $$ = CREATE_NODE(Le, NULL, @$);  addchildren($$, append(newlist($1), $3)); }
+    | OperationExpr LT OperationExpr      { $$ = CREATE_NODE(Lt, NULL, @$);  addchildren($$, append(newlist($1), $3)); }
 
-    | MINUS OperationExpr %prec UNARY_MINUS { $$ = newnode(Minus, NULL); addchild($$, $2); }
-    | PLUS OperationExpr %prec UNARY_PLUS   { $$ = newnode(Plus, NULL);  addchild($$, $2); }
-    | NOT OperationExpr                     { $$ = newnode(Not, NULL);   addchild($$, $2); }
-    | IDENTIFIER                            { $$ = newnode(Identifier, $1); }
-    | IDENTIFIER DOTLENGTH                  { $$ = newnode(Length, NULL); addchild($$, newnode(Identifier, $1)); }
-    | NATURAL                               { $$ = newnode(Natural, $1); }
-    | DECIMAL                               { $$ = newnode(Decimal, $1); }
-    | BOOLLIT                               { $$ = newnode(BoolLit, $1); }
+    | MINUS OperationExpr %prec UNARY_MINUS { $$ = CREATE_NODE(Minus, NULL, @$); addchild($$, $2); }
+    | PLUS OperationExpr %prec UNARY_PLUS   { $$ = CREATE_NODE(Plus, NULL, @$);  addchild($$, $2); }
+    | NOT OperationExpr                     { $$ = CREATE_NODE(Not, NULL, @$);   addchild($$, $2); }
+    | IDENTIFIER                            { $$ = CREATE_NODE(Identifier, $1, @1); }
+    | IDENTIFIER DOTLENGTH                  { $$ = CREATE_NODE(Length, NULL, @$); addchild($$, CREATE_NODE(Identifier, $1, @1)); }
+    | NATURAL                               { $$ = CREATE_NODE(Natural, $1, @1); }
+    | DECIMAL                               { $$ = CREATE_NODE(Decimal, $1, @1); }
+    | BOOLLIT                               { $$ = CREATE_NODE(BoolLit, $1, @1); }
     | MethodInvocation                      { $$ = $1; }
     | ParseArgs                             { $$ = $1; }
     | LPAR Expr RPAR               { $$ = $2; }
     | LPAR error RPAR                       { $$ = NULL; }
     ;
 
-Type: BOOL          { $$ = newnode(Bool, NULL); }
-    | INT           { $$ = newnode(Int, NULL); }
-    | DOUBLE        { $$ = newnode(Double, NULL); }
+Type: BOOL          { $$ = CREATE_NODE(Bool, NULL, @$); }
+    | INT           { $$ = CREATE_NODE(Int, NULL, @$); }
+    | DOUBLE        { $$ = CREATE_NODE(Double, NULL, @$); }
     ;
 
 %%
