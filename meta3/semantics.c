@@ -356,9 +356,10 @@ void check_var_decl(struct node *var_decl, struct symbol_list *local_table) {
   int i = 1;
   struct node *id = getchild(var_decl, i);
 
-  while (id != NULL) {
+  while ((id = getchild(var_decl, i)) != NULL) {
     if (is_reserved_underscore(id)) {
-      id = getchild(var_decl, i++);
+      i++;
+      continue;
     }
 
     if (search_symbol(local_table, id->token) != NULL) {
@@ -368,7 +369,7 @@ void check_var_decl(struct node *var_decl, struct symbol_list *local_table) {
     } else {
       insert_symbol(local_table, id->token, nodes_type, id);
     }
-    id = getchild(var_decl, i++);
+    i++;
   }
 }
 
