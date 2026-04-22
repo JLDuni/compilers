@@ -90,6 +90,8 @@ struct node *getchild(struct node *parent, int position);
 struct node *copy_node(struct node *n);
 int count_list(struct node_list *list);
 
+const char *get_node_string(category cat);
+
 struct node_list *copy_list(struct node_list *list);
 
 void free_ast(struct node *n);

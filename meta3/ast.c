@@ -222,3 +222,7 @@ void free_ast(struct node *n) {
 
   free(n);
 }
+
+const char *get_node_string(category cat) {
+  return node_names[cat];
+}

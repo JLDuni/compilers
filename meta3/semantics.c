@@ -21,7 +21,7 @@ void check_method(struct node *method_decl) {
   if (search_symbol(symbol_table, method_id->token) == NULL) {
     insert_symbol(symbol_table, method_id->token, return_type, method_decl);
   } else {
-    printf("Line %d, Column %d: Symbol %s already defined\n", method_id->line,
+    printf("Line %d, col %d: Symbol %s already defined\n", method_id->line,
            method_id->column, method_id->token);
     semantic_errors++;
   }
@@ -67,31 +67,58 @@ void check_statement(struct node *statement_body,
 
   switch (statement_body->category) {
   case If:
-    if (expression->type != undef_type && expression->type != boolean_type) {
-      printf("Line %d, Column %d: Incompatible type %s in %s statement\n",
+    check_expression(expression, local_table);
+    if (expression->type != boolean_type) {
+      printf("Line %d, col %d: Incompatible type %s in if statement\n",
              expression->line, expression->column,
-             type_to_string(expression->type), expression->token);
+             type_to_string(category_type(expression->category)));
       semantic_errors++;
     }
-    check_expression(expression, local_table);
     check_statement(getchild(statement_body, 1), local_table);
     check_statement(getchild(statement_body, 2), local_table);
     break;
   case While:
-    if (expression->type != undef_type && expression->type != boolean_type) {
-      printf("Line %d, Column %d: Incompatible type %s in %s statement\n",
+    check_expression(expression, local_table);
+    if (expression->type != boolean_type) {
+      printf("Line %d, col %d: Incompatible type %s in %s statement\n",
              expression->line, expression->column,
              type_to_string(expression->type), expression->token);
       semantic_errors++;
     }
-    check_expression(expression, local_table);
     check_statement(getchild(statement_body, 1), local_table);
     break;
-  case Return:
-    if (count_list(statement_body->children) > 0) {
-      check_expression(getchild(statement_body, 0), local_table);
+  case Return: {
+    struct symbol_list *return_sym = search_symbol(local_table, "return");
+    enum type expected_type = return_sym != NULL ? return_sym->type : void_type;
+
+    enum type returned_type = void_type;
+
+    struct node *expr = getchild(statement_body, 0);
+
+    if (expr != NULL) {
+      check_expression(expr, local_table);
+      returned_type = expr->type;
+    }
+
+    bool is_compatible = false;
+    if (expected_type == void_type && expr != NULL) {
+      is_compatible = false;
+    } else if (expected_type == returned_type) {
+      is_compatible = true;
+    } else if (expected_type == double_type && returned_type == integer_type) {
+      is_compatible = true;
+    }
+
+    if (!is_compatible && returned_type != undef_type) {
+      int err_line = (expr != NULL) ? expr->line : statement_body->line;
+      int err_col = (expr != NULL) ? expr->column : statement_body->column;
+
+      printf("Line %d, col %d: Incompatible type %s in return statement\n",
+             err_line, err_col, type_to_string(returned_type));
+      semantic_errors++;
     }
     break;
+  }
   case Assign:
     check_expression(statement_body, local_table);
     break;
@@ -128,8 +155,7 @@ void check_expression(struct node *expr, struct symbol_list *local_scope) {
   struct node_list *child_ptr =
       (expr->children != NULL) ? expr->children->next : NULL;
 
-  if ((expr->category == Call || expr->category == ParseArgs) &&
-      child_ptr != NULL) {
+  if (expr->category == Call && child_ptr != NULL) {
     child_ptr = child_ptr->next;
   }
   while (child_ptr != NULL) {
@@ -142,7 +168,7 @@ void check_expression(struct node *expr, struct symbol_list *local_scope) {
     char *clean_token = clean_token_underscores(expr->token);
     long long value = atoll(clean_token);
     if (value > 2147483647LL) {
-      printf("Line %d, Column %d: Number %s out of bounds", expr->line,
+      printf("Line %d, col %d: Number %s out of bounds\n", expr->line,
              expr->column, expr->token);
       semantic_errors++;
     }
@@ -252,13 +278,48 @@ void check_expression(struct node *expr, struct symbol_list *local_scope) {
     break;
   }
 
-  case ParseArgs:
-    expr->type = integer_type;
-    break;
+  case ParseArgs: {
+    struct node *id_node = getchild(expr, 0);
+    struct node *index_expr = getchild(expr, 1);
 
-  case Length:
+    if (id_node == NULL || index_expr == NULL) {
+      expr->type = integer_type;
+      break;
+    }
+
+    enum type t1 = id_node->type;
+    enum type t2 = index_expr->type;
+
+    if (!((t1 == string_array_type || t1 == undef_type) &&
+          (t2 == integer_type || t2 == undef_type))) {
+
+      printf("Line %d, col %d: Operator Integer.parseInt cannot be applied to "
+             "types %s, %s\n",
+             expr->line, expr->column, type_to_string(t1), type_to_string(t2));
+      semantic_errors++;
+    }
     expr->type = integer_type;
     break;
+  }
+
+  case Length: {
+    struct node *child = getchild(expr, 0);
+
+    if (child == NULL) {
+      expr->type = integer_type;
+      break;
+    }
+
+    enum type t = child->type;
+
+    if (t != string_array_type && t != undef_type) {
+      printf("Line %d, col %d: Operator .length cannot be applied to type %s\n",
+             expr->line, expr->column, type_to_string(t));
+      semantic_errors++;
+    }
+    expr->type = integer_type;
+    break;
+  }
 
   case Call: {
     struct node *id_node = getchild(expr, 0);
@@ -267,14 +328,26 @@ void check_expression(struct node *expr, struct symbol_list *local_scope) {
         id_node->token, expr, &compatible_count_methods);
 
     if (compatible_count_methods > 1) {
-      printf("Line %d, Column %d: Reference to method %s is ambiguous",
+      printf("Line %d, col %d: Reference to method %s is ambiguous",
              id_node->line, id_node->column, id_node->token);
       expr->type = undef_type;
       id_node->type = undef_type;
       semantic_errors++;
     } else if (sym == NULL) {
-      printf("Line %d, col %d: Cannot find symbol %s\n", id_node->line,
+      printf("Line %d, col %d: Cannot find symbol %s(", id_node->line,
              id_node->column, id_node->token);
+
+      struct node_list *arg_ptr = expr->children->next->next;
+
+      while (arg_ptr != NULL) {
+        printf("%s", type_to_string(arg_ptr->node->type));
+        if (arg_ptr->next != NULL) {
+          printf(",");
+        }
+        arg_ptr = arg_ptr->next;
+      }
+      printf(")\n");
+
       expr->type = undef_type;
       id_node->type = undef_type;
       semantic_errors++;
@@ -416,7 +489,7 @@ void check_var_decl(struct node *var_decl, struct symbol_list *local_table) {
     }
 
     if (search_symbol(local_table, id->token) != NULL) {
-      printf("Line %d, column %d: Symbol %s already defined\n", id->line,
+      printf("Line %d, col %d: Symbol %s already defined\n", id->line,
              id->column, id->token);
       semantic_errors++;
     } else {
