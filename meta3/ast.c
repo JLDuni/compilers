@@ -3,7 +3,6 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-
 const char *node_names[] = {
     "Program",      "FieldDecl", "VarDecl",    "MethodDecl", "MethodHeader",
     "MethodParams", "ParamDecl", "MethodBody", "Block",      "If",
@@ -63,13 +62,15 @@ void show(struct node *node, int depth) {
 
   if (node->token != NULL) {
     if (node->category == StrLit) {
-      printf("(\"%s\")", node->token); 
+      printf("(\"%s\")", node->token);
     } else {
       printf("(%s)", node->token);
     }
   }
 
-  if (annotated_ast && node->type != no_type) {
+  if (annotated_ast && node->parameter_types_str != NULL) {
+    printf(" - %s", node->parameter_types_str);
+  } else if (annotated_ast && node->type != no_type) {
     printf(" - %s", type_to_string(node->type));
   }
 
@@ -223,6 +224,4 @@ void free_ast(struct node *n) {
   free(n);
 }
 
-const char *get_node_string(category cat) {
-  return node_names[cat];
-}
+const char *get_node_string(category cat) { return node_names[cat]; }

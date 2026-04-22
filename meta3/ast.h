@@ -73,6 +73,8 @@ struct node {
   int column;
   struct symbol_list *local_symbols;
   struct node_list *children;
+
+  char *parameter_types_str;
 };
 
 struct node_list {

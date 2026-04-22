@@ -8,6 +8,109 @@ int semantic_errors = 0;
 
 struct symbol_list *symbol_table;
 
+void verify_parameters(struct node *parameters) {
+  if (parameters == NULL)
+    return;
+  struct node_list *p_list =
+      (parameters->children != NULL) ? parameters->children->next : NULL;
+
+  struct symbol_list *temp = malloc(sizeof(struct symbol_list));
+  temp->next = NULL;
+  temp->identifier = NULL;
+
+  while (p_list != NULL) {
+    struct node *id = getchild(p_list->node, 1);
+    if (id != NULL) {
+      if (strcmp(id->token, "_") == 0) {
+        printf("Line %d, col %d: Symbol _ is reserved\n", id->line, id->column);
+        semantic_errors++;
+      } else if (search_symbol(temp, id->token) != NULL) {
+        printf("Line %d, col %d: Symbol %s already defined\n", id->line,
+               id->column, id->token);
+        semantic_errors++;
+      } else {
+        insert_symbol(temp, id->token, integer_type, NULL);
+      }
+    }
+    p_list = p_list->next;
+  }
+  free(temp);
+}
+
+int compare_parameters(struct node *params1, struct node *params2) {
+  struct node_list *p1 =
+      params1->children != NULL ? params1->children->next : NULL;
+  struct node_list *p2 =
+      params2->children != NULL ? params2->children->next : NULL;
+
+  while (p1 != NULL && p2 != NULL) {
+    struct node *t1 = getchild(p1->node, 0);
+    struct node *t2 = getchild(p2->node, 0);
+
+    if (category_type(t1->category) != category_type(t2->category)) {
+      return 0;
+    }
+    p1 = p1->next;
+    p2 = p2->next;
+  }
+
+  return (p1 == NULL && p2 == NULL);
+}
+
+void add_method_to_table(struct node *method_decl) {
+  struct node *method_header = getchild(method_decl, 0);
+  struct node *type_node = getchild(method_header, 0);
+  struct node *method_id = getchild(method_header, 1);
+  struct node *parameters = getchild(method_header, 2);
+
+  verify_parameters(parameters);
+
+  enum type return_type = category_type(type_node->category);
+
+  int is_duplicate = 0;
+  struct symbol_list *curr = symbol_table;
+  while (curr != NULL) {
+    if (curr->identifier != NULL &&
+        strcmp(curr->identifier, method_id->token) == 0) {
+      if (curr->node != NULL && curr->node->category == MethodDecl) {
+        struct node *existing_params = getchild(getchild(curr->node, 0), 2);
+        if (compare_parameters(parameters, existing_params)) {
+          is_duplicate = 1;
+          break;
+        }
+      }
+    }
+    curr = curr->next;
+  }
+
+  if (!is_duplicate) {
+    insert_symbol(symbol_table, method_id->token, return_type, method_decl);
+  } else {
+    printf("Line %d, col %d: Symbol %s already defined\n", method_id->line,
+           method_id->column, method_id->token);
+    semantic_errors++;
+  }
+}
+
+void check_method_semantics(struct node *method_decl) {
+  struct node *method_header = getchild(method_decl, 0);
+  struct node *type_node = getchild(method_header, 0);
+  struct node *parameters = getchild(method_header, 2);
+  struct node *body = getchild(method_decl, 1);
+
+  enum type return_type = category_type(type_node->category);
+
+  struct symbol_list *local_table = malloc(sizeof(struct symbol_list));
+  local_table->next = NULL;
+  local_table->identifier = NULL;
+
+  insert_symbol(local_table, "return", return_type, NULL);
+  method_decl->local_symbols = local_table;
+
+  check_parameters(parameters, local_table);
+  check_method_body(body, local_table);
+}
+
 void check_method(struct node *method_decl) {
   struct node *method_header = getchild(method_decl, 0);
   struct node *method_body = getchild(method_decl, 1);
@@ -18,7 +121,25 @@ void check_method(struct node *method_decl) {
 
   enum type return_type = category_type(type_node->category);
 
-  if (search_symbol(symbol_table, method_id->token) == NULL) {
+  int is_duplicate = 0;
+  struct symbol_list *curr = symbol_table;
+
+  while (curr != NULL) {
+    if (curr->identifier != NULL &&
+        strcmp(curr->identifier, method_id->token) == 0) {
+      if (curr->node != NULL && curr->node->category == MethodDecl) {
+        struct node *existing_params = getchild(getchild(curr->node, 0), 2);
+
+        if (compare_parameters(parameters, existing_params)) {
+          is_duplicate = 1;
+          break;
+        }
+      }
+    }
+    curr = curr->next;
+  }
+
+  if (!is_duplicate) {
     insert_symbol(symbol_table, method_id->token, return_type, method_decl);
   } else {
     printf("Line %d, col %d: Symbol %s already defined\n", method_id->line,
@@ -71,7 +192,7 @@ void check_statement(struct node *statement_body,
     if (expression->type != boolean_type) {
       printf("Line %d, col %d: Incompatible type %s in if statement\n",
              expression->line, expression->column,
-             type_to_string(category_type(expression->category)));
+             type_to_string(expression->type));
       semantic_errors++;
     }
     check_statement(getchild(statement_body, 1), local_table);
@@ -109,7 +230,7 @@ void check_statement(struct node *statement_body,
       is_compatible = true;
     }
 
-    if (!is_compatible && returned_type != undef_type) {
+    if (!is_compatible) {
       int err_line = (expr != NULL) ? expr->line : statement_body->line;
       int err_col = (expr != NULL) ? expr->column : statement_body->column;
 
@@ -272,9 +393,25 @@ void check_expression(struct node *expr, struct symbol_list *local_scope) {
   }
 
   case And:
-  case Or:
-  case Xor: {
+  case Or: {
     expr->type = boolean_type;
+    break;
+  }
+
+  case Lshift:
+  case Rshift:
+  case Xor: {
+    enum type t1 = getchild(expr, 0)->type;
+    enum type t2 = getchild(expr, 1)->type;
+
+    expr->type = integer_type;
+
+    if (t1 != integer_type || t2 != integer_type) {
+      printf("Line %d, col %d: Operator %s cannot be applied to types %s, %s\n",
+             expr->line, expr->column, get_symbol_category(expr->category),
+             type_to_string(t1), type_to_string(t2));
+      semantic_errors++;
+    }
     break;
   }
 
@@ -354,6 +491,26 @@ void check_expression(struct node *expr, struct symbol_list *local_scope) {
     } else {
       expr->type = sym->type;
       id_node->type = sym->type;
+
+      char buffer[512] = "(";
+
+      struct node *method_params = getchild(getchild(sym->node, 0), 2);
+
+      if (method_params != NULL && method_params->children != NULL) {
+        struct node_list *p_list = method_params->children->next;
+        while (p_list != NULL) {
+          struct node *param_type_node = getchild(p_list->node, 0);
+          strcat(buffer,
+                 type_to_string(category_type(param_type_node->category)));
+
+          if (p_list->next != NULL) {
+            strcat(buffer, ",");
+          }
+          p_list = p_list->next;
+        }
+      }
+      strcat(buffer, ")");
+      id_node->parameter_types_str = strdup(buffer);
     }
     break;
   }
@@ -428,51 +585,74 @@ char *get_symbol_category(category cat) {
 struct symbol_list *find_correspondent_method(char *call_identifier,
                                               struct node *call_node,
                                               int *compatible_count) {
-  struct node_list *call_id_list = call_node->children;
-  int args_count = count_list(call_id_list) - 2;
-  if (call_identifier == NULL || call_node == NULL) {
+  if (call_identifier == NULL || call_node == NULL)
     return NULL;
-  }
-  struct symbol_list *best_match = NULL;
 
-  struct symbol_list *curr_symbol = symbol_table;
-  while (curr_symbol != NULL) {
-    if (strcmp(curr_symbol->identifier, call_identifier) == 0) {
-      struct node *curr_node = curr_symbol->node;
-      struct node *params = getchild(getchild(curr_node, 0), 2);
-      struct node_list *parameters_list = params->children;
-      int method_params_count = count_list(parameters_list) - 1;
-      if (args_count == method_params_count) {
-        bool exact_match = true;
-        bool compatible_match = true;
-        for (int i = 0; i < args_count; i++) {
-          struct node *id = getchild(call_node, i + 1);
-          category param_category = getchild(getchild(params, i), 0)->category;
+  struct symbol_list *curr = symbol_table;
+  struct symbol_list *exact_match = NULL;
+  struct symbol_list *inexact_match = NULL;
+  *compatible_count = 0;
 
-          enum type param_type = category_type(param_category);
-          enum type call_id_type = id->type;
+  struct node_list *args_list =
+      (call_node->children != NULL && call_node->children->next != NULL)
+          ? call_node->children->next->next
+          : NULL;
 
-          if (param_type != call_id_type) {
-            exact_match = false;
-            if (!(param_type == double_type && call_id_type == integer_type)) {
-              compatible_match = false;
-              break;
+  int num_args_passed = count_list(call_node->children) - 2;
+
+  while (curr != NULL) {
+    if (curr->identifier != NULL &&
+        strcmp(curr->identifier, call_identifier) == 0 && curr->node != NULL &&
+        curr->node->category == MethodDecl) {
+
+      struct node *params = getchild(getchild(curr->node, 0), 2);
+      int num_params_expected = count_list(params->children) - 1;
+
+      if (num_args_passed == num_params_expected) {
+        struct node_list *p_arg = args_list;
+        struct node_list *p_param = params->children->next;
+
+        int is_exact = 1;
+        int is_compatible = 1;
+
+        while (p_arg != NULL && p_param != NULL) {
+          enum type arg_t = p_arg->node->type;
+          struct node *param_type_node = getchild(p_param->node, 0);
+          enum type param_t = category_type(param_type_node->category);
+
+          if (arg_t != param_t) {
+            is_exact = 0;
+
+            if (!(arg_t == integer_type && param_t == double_type)) {
+              is_compatible = 0;
             }
           }
-        }
-        if (exact_match) {
-          return curr_symbol;
+          p_arg = p_arg->next;
+          p_param = p_param->next;
         }
 
-        if (compatible_match) {
-          best_match = curr_symbol;
-          (*compatible_count)++;
+        if (is_compatible) {
+          if (is_exact) {
+            exact_match = curr;
+            break;
+          } else {
+            inexact_match = curr;
+            (*compatible_count)++;
+          }
         }
       }
     }
-    curr_symbol = curr_symbol->next;
+    curr = curr->next;
   }
-  return best_match;
+
+  if (exact_match != NULL) {
+    *compatible_count = 1;
+    return exact_match;
+  } else if (*compatible_count == 1) {
+    return inexact_match;
+  }
+
+  return NULL;
 }
 
 void check_var_decl(struct node *var_decl, struct symbol_list *local_table) {
@@ -480,20 +660,18 @@ void check_var_decl(struct node *var_decl, struct symbol_list *local_table) {
   enum type nodes_type = category_type(type->category);
 
   int i = 1;
-  struct node *id = getchild(var_decl, i);
-
+  struct node *id;
   while ((id = getchild(var_decl, i)) != NULL) {
-    if (is_reserved_underscore(id)) {
-      i++;
-      continue;
-    }
-
-    if (search_symbol(local_table, id->token) != NULL) {
-      printf("Line %d, col %d: Symbol %s already defined\n", id->line,
-             id->column, id->token);
-      semantic_errors++;
+    if (strcmp(id->token, "_") == 0) {
+      is_reserved_underscore(id);
     } else {
-      insert_symbol(local_table, id->token, nodes_type, id);
+      if (search_symbol(local_table, id->token) != NULL) {
+        printf("Line %d, col %d: Symbol %s already defined\n", id->line,
+               id->column, id->token);
+        semantic_errors++;
+      } else {
+        insert_symbol(local_table, id->token, nodes_type, id);
+      }
     }
     i++;
   }
@@ -513,54 +691,46 @@ char *clean_token_underscores(char *token) {
 
 void check_parameters(struct node *parameters,
                       struct symbol_list *scope_table) {
-  if (parameters == NULL) {
+  if (parameters == NULL)
     return;
-  }
-  struct node_list *parameter = parameters->children;
-  while (parameter != NULL) {
-    struct node *current_parameter = parameter->node;
-    if (current_parameter != NULL) {
-      struct node *id = getchild(current_parameter, 1);
-      struct node *type = getchild(current_parameter, 0);
+  struct node_list *p_list =
+      (parameters->children != NULL) ? parameters->children->next : NULL;
 
-      if (!is_reserved_underscore(id)) {
-        char *identifier = id->token;
-        if (search_symbol(scope_table, identifier) != NULL) {
-          printf("Line %d, col %d: Symbol %s already defined\n", id->line,
-                 id->column, id->token);
-          semantic_errors++;
-          return;
-        } else {
-          enum type p_type = category_type(type->category);
-          struct symbol_list *new_symbol =
-              insert_symbol(scope_table, id->token, p_type, type);
-          new_symbol->is_parameter = 1;
-        }
+  while (p_list != NULL) {
+    struct node *id = getchild(p_list->node, 1);
+    struct node *type_node = getchild(p_list->node, 0);
+
+    if (id != NULL && strcmp(id->token, "_") != 0) {
+      if (search_symbol(scope_table, id->token) == NULL) {
+        struct symbol_list *s =
+            insert_symbol(scope_table, id->token,
+                          category_type(type_node->category), type_node);
+        if (s)
+          s->is_parameter = 1;
       }
     }
-    parameter = parameter->next;
+    p_list = p_list->next;
   }
 }
 
 void check_field_decl(struct node *field_decl,
                       struct symbol_list *global_table) {
-  if (field_decl == NULL)
-    return;
-
   struct node *type_node = getchild(field_decl, 0);
-  struct node *id_node = getchild(field_decl, 1);
-
   enum type field_type = category_type(type_node->category);
 
-  struct symbol_list *existing_symbol =
-      search_symbol(global_table, id_node->token);
-
-  if (existing_symbol != NULL) {
-    printf("Line %d, col %d: Symbol %s already defined\n", id_node->line,
-           id_node->column, id_node->token);
-    semantic_errors++;
-  } else {
-    insert_symbol(global_table, id_node->token, field_type, NULL);
+  int i = 1;
+  struct node *id_node;
+  while ((id_node = getchild(field_decl, i)) != NULL) {
+    if (!is_reserved_underscore(id_node)) {
+      if (search_symbol(global_table, id_node->token) != NULL) {
+        printf("Line %d, col %d: Symbol %s already defined\n", id_node->line,
+               id_node->column, id_node->token);
+        semantic_errors++;
+      } else {
+        insert_symbol(global_table, id_node->token, field_type, NULL);
+      }
+    }
+    i++;
   }
 }
 
@@ -573,24 +743,29 @@ int check_program(struct node *program) {
   if (class_id != NULL && class_id->token != NULL) {
     symbol_table->identifier = strdup(class_id->token);
   }
-  symbol_table->identifier = strdup(class_id->token);
+
   struct node_list *child = program->children;
+
   while ((child = child->next) != NULL) {
     if (child->node->category == MethodDecl) {
-      check_method(child->node);
+      add_method_to_table(child->node);
     } else if (child->node->category == FieldDecl) {
       check_field_decl(child->node, symbol_table);
     }
   }
 
+  child = program->children;
+  while ((child = child->next) != NULL) {
+    if (child->node->category == MethodDecl) {
+      check_method_semantics(child->node);
+    }
+  }
   return semantic_errors;
 }
 
 // insert a new symbol in the list, unless it is already there
 struct symbol_list *insert_symbol(struct symbol_list *table, char *identifier,
                                   enum type type, struct node *node) {
-  if (search_symbol(table, identifier) != NULL)
-    return NULL; /* return NULL if symbol is already inserted */
   struct symbol_list *new =
       (struct symbol_list *)malloc(sizeof(struct symbol_list));
   new->identifier = strdup(identifier);
@@ -600,6 +775,7 @@ struct symbol_list *insert_symbol(struct symbol_list *table, char *identifier,
   struct symbol_list *symbol = table;
   while (symbol->next != NULL)
     symbol = symbol->next;
+
   symbol->next = new; /* insert new symbol at the tail of the list */
   return new;
 }
