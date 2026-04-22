@@ -60,6 +60,7 @@ enum type {
   integer_type,
   double_type,
   boolean_type,
+  string_type,
   string_array_type,
   void_type,
   undef_type
@@ -73,6 +74,7 @@ struct node {
   int column;
   struct symbol_list *local_symbols;
   struct node_list *children;
+  int is_duplicate;
 
   char *parameter_types_str;
 };

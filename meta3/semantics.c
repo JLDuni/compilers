@@ -1,5 +1,6 @@
 #include "semantics.h"
 #include "ast.h"
+#include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -59,16 +60,15 @@ int compare_parameters(struct node *params1, struct node *params2) {
 
 void add_method_to_table(struct node *method_decl) {
   struct node *method_header = getchild(method_decl, 0);
-  struct node *type_node = getchild(method_header, 0);
   struct node *method_id = getchild(method_header, 1);
   struct node *parameters = getchild(method_header, 2);
-
-  verify_parameters(parameters);
-
+  struct node *type_node = getchild(method_header, 0);
   enum type return_type = category_type(type_node->category);
 
   int is_duplicate = 0;
   struct symbol_list *curr = symbol_table;
+  verify_parameters(parameters);
+
   while (curr != NULL) {
     if (curr->identifier != NULL &&
         strcmp(curr->identifier, method_id->token) == 0) {
@@ -85,26 +85,35 @@ void add_method_to_table(struct node *method_decl) {
 
   if (!is_duplicate) {
     insert_symbol(symbol_table, method_id->token, return_type, method_decl);
+    method_decl->is_duplicate = 0;
   } else {
-    printf("Line %d, col %d: Symbol %s already defined\n", method_id->line,
-           method_id->column, method_id->token);
+    printf("Line %d, col %d: Symbol %s", method_id->line, method_id->column,
+           method_id->token);
+    print_method_params(method_decl);
+    printf(" already defined\n");
     semantic_errors++;
+    method_decl->is_duplicate = 1;
+    method_decl->local_symbols = NULL;
   }
 }
 
 void check_method_semantics(struct node *method_decl) {
+
+  if (method_decl->is_duplicate) {
+    return;
+  }
+
   struct node *method_header = getchild(method_decl, 0);
   struct node *type_node = getchild(method_header, 0);
   struct node *parameters = getchild(method_header, 2);
   struct node *body = getchild(method_decl, 1);
 
-  enum type return_type = category_type(type_node->category);
-
   struct symbol_list *local_table = malloc(sizeof(struct symbol_list));
   local_table->next = NULL;
   local_table->identifier = NULL;
+  insert_symbol(local_table, "return", category_type(type_node->category),
+                NULL);
 
-  insert_symbol(local_table, "return", return_type, NULL);
   method_decl->local_symbols = local_table;
 
   check_parameters(parameters, local_table);
@@ -141,22 +150,25 @@ void check_method(struct node *method_decl) {
 
   if (!is_duplicate) {
     insert_symbol(symbol_table, method_id->token, return_type, method_decl);
+
+    struct symbol_list *local_table = malloc(sizeof(struct symbol_list));
+    local_table->next = NULL;
+    local_table->identifier = NULL;
+    insert_symbol(local_table, "return", return_type, NULL);
+
+    method_decl->local_symbols = local_table;
+
+    check_parameters(parameters, local_table);
+
+    struct node *body = getchild(method_decl, 1);
+    check_method_body(body, local_table);
   } else {
-    printf("Line %d, col %d: Symbol %s already defined\n", method_id->line,
-           method_id->column, method_id->token);
+    printf("Line %d, col %d: Symbol %s", method_id->line, method_id->column,
+           method_id->token);
+    print_method_params(method_decl);
+    printf(" already defined\n");
     semantic_errors++;
   }
-  struct symbol_list *local_table = malloc(sizeof(struct symbol_list));
-  local_table->next = NULL;
-  local_table->identifier = NULL;
-  insert_symbol(local_table, "return", return_type, NULL);
-
-  method_decl->local_symbols = local_table;
-
-  check_parameters(parameters, local_table);
-
-  struct node *body = getchild(method_decl, 1);
-  check_method_body(body, local_table);
 }
 
 void check_method_body(struct node *method_body,
@@ -243,23 +255,40 @@ void check_statement(struct node *statement_body,
   case Assign:
     check_expression(statement_body, local_table);
     break;
-  case Print:
-    struct node *print = getchild(statement_body, 0);
-    if (print->category != StrLit) {
-      check_expression(print, local_table);
+
+  case Print: {
+    struct node *print_child = getchild(statement_body, 0);
+
+    if (print_child != NULL) {
+      check_expression(print_child, local_table);
+
+      enum type t = print_child->type;
+      if (t != integer_type && t != double_type && t != boolean_type &&
+          t != string_type) {
+        printf("Line %d, col %d: Incompatible type %s in System.out.print "
+               "statement\n",
+               print_child->line, print_child->column, type_to_string(t));
+        semantic_errors++;
+      }
     }
     break;
+  }
 
-  case Block:
+  case Block: {
     if (statement_body->children != NULL) {
-      struct node_list *statements = statement_body->children;
+      struct node_list *statements = statement_body->children->next;
       while (statements != NULL) {
         struct node *statement_node = statements->node;
-        check_expression(statement_node, local_table);
+        if (statement_node->category == VarDecl) {
+          check_var_decl(statement_node, local_table);
+        } else {
+          check_statement(statement_node, local_table);
+        }
         statements = statements->next;
       }
     }
     break;
+  }
 
   default:
     if (statement_body->category == Call ||
@@ -288,21 +317,54 @@ void check_expression(struct node *expr, struct symbol_list *local_scope) {
   case Natural:
     char *clean_token = clean_token_underscores(expr->token);
     long long value = atoll(clean_token);
-    if (value > 2147483647LL) {
+    if (value > 2147483649LL || (value == 2147483648LL)) {
       printf("Line %d, col %d: Number %s out of bounds\n", expr->line,
              expr->column, expr->token);
       semantic_errors++;
     }
     expr->type = integer_type;
     break;
-  case Decimal:
+  case Decimal: {
+    char *clean = clean_token_underscores(expr->token);
+    double val = strtod(clean, NULL);
+
+    if (val == HUGE_VAL || val == -HUGE_VAL) {
+      printf("Line %d, col %d: Number %s out of bounds\n", expr->line,
+             expr->column, expr->token);
+      semantic_errors++;
+    } else if (val == 0.0) {
+      int has_value = 0;
+      for (int i = 0; clean[i]; i++)
+        if (clean[i] >= '1' && clean[i] <= '9') {
+          has_value = 1;
+          break;
+        }
+
+      if (has_value) {
+        printf("Line %d, col %d: Number %s out of bounds\n", expr->line,
+               expr->column, expr->token);
+        semantic_errors++;
+      }
+    }
+
+    free(clean);
     expr->type = double_type;
     break;
+  }
   case BoolLit:
     expr->type = boolean_type;
     break;
+
+  case StrLit:
+    expr->type = string_type;
+    break;
+
   case Identifier: {
     struct symbol_list *sym = search_symbol(local_scope, expr->token);
+    if (sym == NULL) {
+      sym = search_symbol(symbol_table, expr->token);
+    }
+
     if (sym != NULL) {
       expr->type = sym->type;
     } else {
@@ -337,15 +399,14 @@ void check_expression(struct node *expr, struct symbol_list *local_scope) {
     struct node *child = getchild(expr, 0);
     enum type t = child->type;
 
-    if (t == boolean_type) {
-      expr->type = boolean_type;
-    } else if (t != undef_type) {
-      printf("Line %d, col %d: Operator ! cannot be applied to type %s\n",
-             expr->line, expr->column, type_to_string(t));
-      expr->type = undef_type;
-      semantic_errors++;
-    } else {
-      expr->type = undef_type;
+    expr->type = boolean_type;
+
+    if (t != boolean_type) {
+      if (t != undef_type) {
+        printf("Line %d, col %d: Operator ! cannot be applied to type %s\n",
+               expr->line, expr->column, type_to_string(t));
+        semantic_errors++;
+      }
     }
     break;
   }
@@ -372,8 +433,6 @@ void check_expression(struct node *expr, struct symbol_list *local_scope) {
     break;
   }
 
-  case Eq:
-  case Ne:
   case Lt:
   case Gt:
   case Le:
@@ -383,18 +442,59 @@ void check_expression(struct node *expr, struct symbol_list *local_scope) {
 
     expr->type = boolean_type;
 
-    if (!((t1 == t2) || ((t1 == integer_type || t1 == double_type) &&
-                         (t2 == integer_type || t2 == double_type)))) {
+    int is_numeric1 = (t1 == integer_type || t1 == double_type);
+    int is_numeric2 = (t2 == integer_type || t2 == double_type);
+
+    if (!(is_numeric1 && is_numeric2)) {
+      if (t1 != undef_type && t2 != undef_type) {
+        printf(
+            "Line %d, col %d: Operator %s cannot be applied to types %s, %s\n",
+            expr->line, expr->column, get_symbol_category(expr->category),
+            type_to_string(t1), type_to_string(t2));
+        semantic_errors++;
+      }
+    }
+    break;
+  }
+
+  case Eq:
+  case Ne: {
+    enum type t1 = getchild(expr, 0)->type;
+    enum type t2 = getchild(expr, 1)->type;
+    expr->type = boolean_type;
+
+    int valid = 0;
+    if ((t1 == integer_type || t1 == double_type) &&
+        (t2 == integer_type || t2 == double_type))
+      valid = 1;
+    else if (t1 == boolean_type && t2 == boolean_type)
+      valid = 1;
+
+    if (!valid) {
       printf("Line %d, col %d: Operator %s cannot be applied to types %s, %s\n",
              expr->line, expr->column, get_symbol_category(expr->category),
              type_to_string(t1), type_to_string(t2));
+      semantic_errors++;
     }
     break;
   }
 
   case And:
   case Or: {
+    enum type t1 = getchild(expr, 0)->type;
+    enum type t2 = getchild(expr, 1)->type;
+
     expr->type = boolean_type;
+
+    if (t1 != boolean_type || t2 != boolean_type) {
+      if (!(t1 == undef_type && t2 == undef_type)) {
+        printf(
+            "Line %d, col %d: Operator %s cannot be applied to types %s, %s\n",
+            expr->line, expr->column, get_symbol_category(expr->category),
+            type_to_string(t1), type_to_string(t2));
+        semantic_errors++;
+      }
+    }
     break;
   }
 
@@ -427,9 +527,7 @@ void check_expression(struct node *expr, struct symbol_list *local_scope) {
     enum type t1 = id_node->type;
     enum type t2 = index_expr->type;
 
-    if (!((t1 == string_array_type || t1 == undef_type) &&
-          (t2 == integer_type || t2 == undef_type))) {
-
+    if (t1 != string_array_type || t2 != integer_type) {
       printf("Line %d, col %d: Operator Integer.parseInt cannot be applied to "
              "types %s, %s\n",
              expr->line, expr->column, type_to_string(t1), type_to_string(t2));
@@ -449,7 +547,7 @@ void check_expression(struct node *expr, struct symbol_list *local_scope) {
 
     enum type t = child->type;
 
-    if (t != string_array_type && t != undef_type) {
+    if (t != string_array_type) {
       printf("Line %d, col %d: Operator .length cannot be applied to type %s\n",
              expr->line, expr->column, type_to_string(t));
       semantic_errors++;
@@ -465,8 +563,18 @@ void check_expression(struct node *expr, struct symbol_list *local_scope) {
         id_node->token, expr, &compatible_count_methods);
 
     if (compatible_count_methods > 1) {
-      printf("Line %d, col %d: Reference to method %s is ambiguous",
-             id_node->line, id_node->column, id_node->token);
+      printf("Line %d, col %d: Reference to method %s", id_node->line,
+             id_node->column, id_node->token);
+
+      printf("(");
+      struct node_list *arg_ptr = expr->children->next->next;
+      while (arg_ptr != NULL) {
+        printf("%s", type_to_string(arg_ptr->node->type));
+        if (arg_ptr->next != NULL)
+          printf(",");
+        arg_ptr = arg_ptr->next;
+      }
+      printf(") is ambiguous\n");
       expr->type = undef_type;
       id_node->type = undef_type;
       semantic_errors++;
@@ -516,15 +624,29 @@ void check_expression(struct node *expr, struct symbol_list *local_scope) {
   }
 
   case Assign: {
-    enum type t_id = getchild(expr, 0)->type;
-    enum type t_val = getchild(expr, 1)->type;
-    expr->type = t_id;
+    enum type t1 = getchild(expr, 0)->type;
+    enum type t2 = getchild(expr, 1)->type;
 
-    if (t_id != t_val && !(t_id == double_type && t_val == integer_type)) {
-      printf("Line %d, col %d: Operator = cannot be applied to types %s, %s\n",
-             expr->line, expr->column, type_to_string(t_id),
-             type_to_string(t_val));
-      semantic_errors++;
+    expr->type = t1;
+
+    int is_primitive =
+        (t1 == integer_type || t1 == double_type || t1 == boolean_type);
+    int valid = 0;
+
+    if (is_primitive) {
+      if (t1 == t2)
+        valid = 1;
+      else if (t1 == double_type && t2 == integer_type)
+        valid = 1;
+    }
+
+    if (!valid) {
+      if (!(t1 == undef_type && t2 == undef_type)) {
+        printf(
+            "Line %d, col %d: Operator = cannot be applied to types %s, %s\n",
+            expr->line, expr->column, type_to_string(t1), type_to_string(t2));
+        semantic_errors++;
+      }
     }
     break;
   }
@@ -806,6 +928,8 @@ char *type_to_string(enum type type) {
     return "void";
   case undef_type:
     return "undef";
+  case string_type:
+    return "String";
   default:
     return "";
   }
@@ -866,21 +990,22 @@ void print_tables(struct node *program) {
   struct node_list *child = program->children->next;
   while (child != NULL) {
     if (child->node->category == MethodDecl) {
-      struct node *header = getchild(child->node, 0);
-      char *m_name = getchild(header, 1)->token;
+      if (!child->node->is_duplicate && child->node->local_symbols != NULL) {
+        struct node *header = getchild(child->node, 0);
+        char *m_name = getchild(header, 1)->token;
 
-      printf("===== Method %s", m_name);
-      print_method_params(child->node);
-      printf(" Symbol Table =====\n");
+        printf("===== Method %s", m_name);
+        print_method_params(child->node);
+        printf(" Symbol Table =====\n");
 
-      struct symbol_list *local = child->node->local_symbols;
-      struct symbol_list *ls = local->next;
-      while (ls != NULL) {
-        printf("%s\t\t%s%s\n", ls->identifier, type_to_string(ls->type),
-               ls->is_parameter ? "\tparam" : "");
-        ls = ls->next;
+        struct symbol_list *ls = child->node->local_symbols->next;
+        while (ls != NULL) {
+          printf("%s\t\t%s%s\n", ls->identifier, type_to_string(ls->type),
+                 ls->is_parameter ? "\tparam" : "");
+          ls = ls->next;
+        }
+        printf("\n");
       }
-      printf("\n");
     }
     child = child->next;
   }
