@@ -10,32 +10,46 @@ int semantic_errors = 0;
 struct symbol_list *symbol_table;
 
 void verify_parameters(struct node *parameters) {
-  if (parameters == NULL)
+  if (parameters == NULL || parameters->children == NULL)
     return;
-  struct node_list *p_list =
-      (parameters->children != NULL) ? parameters->children->next : NULL;
+
+  struct node_list *p_list = parameters->children->next;
 
   struct symbol_list *temp = malloc(sizeof(struct symbol_list));
+  if (temp == NULL)
+    return;
+
   temp->next = NULL;
   temp->identifier = NULL;
+  temp->node = NULL;
 
   while (p_list != NULL) {
-    struct node *id = getchild(p_list->node, 1);
-    if (id != NULL) {
-      if (strcmp(id->token, "_") == 0) {
-        printf("Line %d, col %d: Symbol _ is reserved\n", id->line, id->column);
-        semantic_errors++;
-      } else if (search_symbol(temp, id->token) != NULL) {
-        printf("Line %d, col %d: Symbol %s already defined\n", id->line,
-               id->column, id->token);
-        semantic_errors++;
-      } else {
-        insert_symbol(temp, id->token, integer_type, NULL);
+    if (p_list->node != NULL) {
+      struct node *id = getchild(p_list->node, 1);
+
+      if (id != NULL && id->token != NULL) {
+        if (strcmp(id->token, "_") == 0) {
+          printf("Line %d, col %d: Symbol _ is reserved\n", id->line,
+                 id->column);
+          semantic_errors++;
+        } else if (search_symbol(temp, id->token) != NULL) {
+          printf("Line %d, col %d: Symbol %s already defined\n", id->line,
+                 id->column, id->token);
+          semantic_errors++;
+        } else {
+          insert_symbol(temp, id->token, integer_type, NULL);
+        }
       }
     }
     p_list = p_list->next;
   }
-  free(temp);
+
+  struct symbol_list *curr = temp;
+  while (curr != NULL) {
+    struct symbol_list *next_node = curr->next;
+    free(curr);
+    curr = next_node;
+  }
 }
 
 int compare_parameters(struct node *params1, struct node *params2) {
@@ -59,24 +73,41 @@ int compare_parameters(struct node *params1, struct node *params2) {
 }
 
 void add_method_to_table(struct node *method_decl) {
+  if (method_decl == NULL)
+    return;
+
   struct node *method_header = getchild(method_decl, 0);
+  if (method_header == NULL)
+    return;
+
   struct node *method_id = getchild(method_header, 1);
   struct node *parameters = getchild(method_header, 2);
   struct node *type_node = getchild(method_header, 0);
-  enum type return_type = category_type(type_node->category);
 
+  if (method_id == NULL || method_id->token == NULL || type_node == NULL) {
+    return;
+  }
+
+  enum type return_type = category_type(type_node->category);
   int is_duplicate = 0;
-  struct symbol_list *curr = symbol_table;
+
   verify_parameters(parameters);
+
+  struct symbol_list *curr = symbol_table;
 
   while (curr != NULL) {
     if (curr->identifier != NULL &&
         strcmp(curr->identifier, method_id->token) == 0) {
       if (curr->node != NULL && curr->node->category == MethodDecl) {
-        struct node *existing_params = getchild(getchild(curr->node, 0), 2);
-        if (compare_parameters(parameters, existing_params)) {
-          is_duplicate = 1;
-          break;
+
+        struct node *existing_header = getchild(curr->node, 0);
+        if (existing_header != NULL) {
+          struct node *existing_params = getchild(existing_header, 2);
+
+          if (compare_parameters(parameters, existing_params)) {
+            is_duplicate = 1;
+            break;
+          }
         }
       }
     }
@@ -91,49 +122,37 @@ void add_method_to_table(struct node *method_decl) {
            method_id->token);
     print_method_params(method_decl);
     printf(" already defined\n");
+
     semantic_errors++;
     method_decl->is_duplicate = 1;
     method_decl->local_symbols = NULL;
   }
 }
 
-void add_field_decl(struct node *field_decl) {
-  category type = getchild(field_decl, 0)->category;
-  struct node_list *children = field_decl->children->next->next;
-  while (children != NULL) {
-    if (!is_reserved_underscore(children->node)) {
-      struct symbol_list *sym =
-          search_symbol(symbol_table, children->node->token);
-
-      if (sym != NULL && sym->node->category == FieldDecl &&
-          sym->node != NULL) {
-        printf("Line %d, col %d: Symbol %s already defined\n",
-               children->node->line, children->node->column,
-               children->node->token);
-        semantic_errors++;
-      } else {
-        insert_symbol(symbol_table, sym->node->token, category_type(type),
-                      field_decl);
-      }
-    }
-    children = children->next;
-  }
-}
-
 void check_method_semantics(struct node *method_decl) {
+  if (method_decl == NULL)
+    return;
 
   if (method_decl->is_duplicate) {
     return;
   }
 
   struct node *method_header = getchild(method_decl, 0);
+
   struct node *type_node = getchild(method_header, 0);
+
   struct node *parameters = getchild(method_header, 2);
   struct node *body = getchild(method_decl, 1);
 
   struct symbol_list *local_table = malloc(sizeof(struct symbol_list));
+  if (local_table == NULL)
+    return;
+
   local_table->next = NULL;
   local_table->identifier = NULL;
+  local_table->node = NULL;
+  local_table->type = undef_type;
+
   insert_symbol(local_table, "return", category_type(type_node->category),
                 NULL);
 
@@ -144,15 +163,19 @@ void check_method_semantics(struct node *method_decl) {
 }
 
 void check_method(struct node *method_decl) {
+  if (method_decl == NULL)
+    return;
+
   struct node *method_header = getchild(method_decl, 0);
-  struct node *method_body = getchild(method_decl, 1);
 
   struct node *type_node = getchild(method_header, 0);
   struct node *method_id = getchild(method_header, 1);
   struct node *parameters = getchild(method_header, 2);
 
-  enum type return_type = category_type(type_node->category);
+  if (type_node == NULL || method_id == NULL || method_id->token == NULL)
+    return;
 
+  enum type return_type = category_type(type_node->category);
   int is_duplicate = 0;
   struct symbol_list *curr = symbol_table;
 
@@ -160,11 +183,14 @@ void check_method(struct node *method_decl) {
     if (curr->identifier != NULL &&
         strcmp(curr->identifier, method_id->token) == 0) {
       if (curr->node != NULL && curr->node->category == MethodDecl) {
-        struct node *existing_params = getchild(getchild(curr->node, 0), 2);
 
-        if (compare_parameters(parameters, existing_params)) {
-          is_duplicate = 1;
-          break;
+        struct node *existing_header = getchild(curr->node, 0);
+        if (existing_header != NULL) {
+          struct node *existing_params = getchild(existing_header, 2);
+          if (compare_parameters(parameters, existing_params)) {
+            is_duplicate = 1;
+            break;
+          }
         }
       }
     }
@@ -172,19 +198,26 @@ void check_method(struct node *method_decl) {
   }
 
   if (!is_duplicate) {
-    insert_symbol(symbol_table, method_id->token, return_type, method_decl);
+    if (symbol_table != NULL) {
+      insert_symbol(symbol_table, method_id->token, return_type, method_decl);
+    }
 
     struct symbol_list *local_table = malloc(sizeof(struct symbol_list));
+    if (local_table == NULL)
+      return;
+
     local_table->next = NULL;
     local_table->identifier = NULL;
-    insert_symbol(local_table, "return", return_type, NULL);
+    local_table->node = NULL;
 
+    insert_symbol(local_table, "return", return_type, NULL);
     method_decl->local_symbols = local_table;
 
     check_parameters(parameters, local_table);
 
     struct node *body = getchild(method_decl, 1);
     check_method_body(body, local_table);
+
   } else {
     printf("Line %d, col %d: Symbol %s", method_id->line, method_id->column,
            method_id->token);
@@ -199,9 +232,16 @@ void check_method_body(struct node *method_body,
   if (method_body == NULL || local_table == NULL) {
     return;
   }
-  struct node_list *curr = method_body->children;
+
+  if (method_body->children == NULL) {
+    return;
+  }
+
+  struct node_list *curr = method_body->children->next;
+
   while (curr != NULL) {
     struct node *child = curr->node;
+
     if (child != NULL) {
       if (child->category == VarDecl) {
         check_var_decl(child, local_table);
@@ -209,109 +249,109 @@ void check_method_body(struct node *method_body,
         check_statement(child, local_table);
       }
     }
+
     curr = curr->next;
   }
 }
 
 void check_statement(struct node *statement_body,
                      struct symbol_list *local_table) {
-  if (statement_body == NULL) {
+  if (statement_body == NULL)
     return;
-  }
 
   struct node *expression = getchild(statement_body, 0);
 
   switch (statement_body->category) {
   case If:
-    check_expression(expression, local_table);
-    if (expression->type != boolean_type) {
-      printf("Line %d, col %d: Incompatible type %s in if statement\n",
-             expression->line, expression->column,
-             type_to_string(expression->type));
-      semantic_errors++;
+    if (expression != NULL) {
+      check_expression(expression, local_table);
+      if (expression->type != boolean_type) {
+        printf("Line %d, col %d: Incompatible type %s in if statement\n",
+               expression->line, expression->column,
+               type_to_string(expression->type));
+        semantic_errors++;
+      }
     }
     check_statement(getchild(statement_body, 1), local_table);
     check_statement(getchild(statement_body, 2), local_table);
     break;
+
   case While:
-    check_expression(expression, local_table);
-    if (expression->type != boolean_type) {
-      printf("Line %d, col %d: Incompatible type %s in while statement\n",
-             expression->line, expression->column,
-             type_to_string(expression->type));
-      semantic_errors++;
+    if (expression != NULL) {
+      check_expression(expression, local_table);
+      if (expression->type != boolean_type) {
+        printf("Line %d, col %d: Incompatible type %s in while statement\n",
+               expression->line, expression->column,
+               type_to_string(expression->type));
+        semantic_errors++;
+      }
     }
     check_statement(getchild(statement_body, 1), local_table);
     break;
+
   case Return: {
     struct symbol_list *return_sym = search_symbol(local_table, "return");
-    enum type expected_type = return_sym != NULL ? return_sym->type : void_type;
-
+    enum type expected_type =
+        (return_sym != NULL) ? return_sym->type : void_type;
     enum type returned_type = void_type;
 
-    struct node *expr = getchild(statement_body, 0);
-
-    if (expr != NULL) {
-      check_expression(expr, local_table);
-      returned_type = expr->type;
+    if (expression != NULL) {
+      check_expression(expression, local_table);
+      returned_type = expression->type;
     }
 
     bool is_compatible = false;
-    if (expected_type == void_type && expr != NULL) {
+    if (expected_type == void_type && expression != NULL)
       is_compatible = false;
-    } else if (expected_type == returned_type) {
+    else if (expected_type == returned_type)
       is_compatible = true;
-    } else if (expected_type == double_type && returned_type == integer_type) {
+    else if (expected_type == double_type && returned_type == integer_type)
       is_compatible = true;
-    }
 
     if (!is_compatible) {
-      int err_line = (expr != NULL) ? expr->line : statement_body->line;
-      int err_col = (expr != NULL) ? expr->column : statement_body->column;
-
+      int err_line =
+          (expression != NULL) ? expression->line : statement_body->line;
+      int err_col =
+          (expression != NULL) ? expression->column : statement_body->column;
       printf("Line %d, col %d: Incompatible type %s in return statement\n",
              err_line, err_col, type_to_string(returned_type));
       semantic_errors++;
     }
     break;
   }
+
   case Assign:
     check_expression(statement_body, local_table);
     break;
 
-  case Print: {
-    struct node *print_child = getchild(statement_body, 0);
-
-    if (print_child != NULL) {
-      check_expression(print_child, local_table);
-
-      enum type t = print_child->type;
+  case Print:
+    if (expression != NULL) {
+      check_expression(expression, local_table);
+      enum type t = expression->type;
       if (t != integer_type && t != double_type && t != boolean_type &&
           t != string_type) {
         printf("Line %d, col %d: Incompatible type %s in System.out.print "
                "statement\n",
-               print_child->line, print_child->column, type_to_string(t));
+               expression->line, expression->column, type_to_string(t));
         semantic_errors++;
       }
     }
     break;
-  }
 
-  case Block: {
+  case Block:
     if (statement_body->children != NULL) {
-      struct node_list *statements = statement_body->children->next;
-      while (statements != NULL) {
-        struct node *statement_node = statements->node;
-        if (statement_node->category == VarDecl) {
-          check_var_decl(statement_node, local_table);
-        } else {
-          check_statement(statement_node, local_table);
+      struct node_list *curr = statement_body->children->next;
+      while (curr != NULL) {
+        if (curr->node != NULL) { // PROTEÇÃO VITAL
+          if (curr->node->category == VarDecl)
+            check_var_decl(curr->node, local_table);
+          else
+            check_statement(curr->node, local_table);
         }
-        statements = statements->next;
+        curr = curr->next;
       }
     }
     break;
-  }
 
   default:
     if (statement_body->category == Call ||
@@ -338,6 +378,9 @@ void check_expression(struct node *expr, struct symbol_list *local_scope) {
 
   switch (expr->category) {
   case Natural:
+    if (expr->token == NULL) {
+      break;
+    }
     char *clean_token = clean_token_underscores(expr->token);
     long long value = atoll(clean_token);
     if (value > 2147483649LL || (value == 2147483648LL)) {
@@ -414,6 +457,10 @@ void check_expression(struct node *expr, struct symbol_list *local_scope) {
   case Minus:
   case Plus: {
     struct node *child = getchild(expr, 0);
+    if (child == NULL) {
+      expr->type = undef_type;
+      break;
+    }
     enum type t = child->type;
 
     if (t == integer_type || t == double_type) {
@@ -432,6 +479,10 @@ void check_expression(struct node *expr, struct symbol_list *local_scope) {
 
   case Not: {
     struct node *child = getchild(expr, 0);
+    if (child == NULL) {
+      expr->type = undef_type;
+      break;
+    }
     enum type t = child->type;
 
     expr->type = boolean_type;
@@ -451,8 +502,14 @@ void check_expression(struct node *expr, struct symbol_list *local_scope) {
   case Mul:
   case Div:
   case Mod: {
-    enum type t1 = getchild(expr, 0)->type;
-    enum type t2 = getchild(expr, 1)->type;
+    struct node *c1 = getchild(expr, 0);
+    struct node *c2 = getchild(expr, 1);
+    if (c1 == NULL || c2 == NULL) {
+      expr->type = undef_type;
+      break;
+    }
+    enum type t1 = c1->type;
+    enum type t2 = c2->type;
 
     if ((t1 == integer_type || t1 == double_type) &&
         (t2 == integer_type || t2 == double_type)) {
@@ -472,8 +529,14 @@ void check_expression(struct node *expr, struct symbol_list *local_scope) {
   case Gt:
   case Le:
   case Ge: {
-    enum type t1 = getchild(expr, 0)->type;
-    enum type t2 = getchild(expr, 1)->type;
+    struct node *c1 = getchild(expr, 0);
+    struct node *c2 = getchild(expr, 1);
+    if (c1 == NULL || c2 == NULL) {
+      expr->type = undef_type;
+      break;
+    }
+    enum type t1 = c1->type;
+    enum type t2 = c2->type;
 
     expr->type = boolean_type;
 
@@ -637,7 +700,9 @@ void check_expression(struct node *expr, struct symbol_list *local_scope) {
 
       char buffer[512] = "(";
 
-      struct node *method_params = getchild(getchild(sym->node, 0), 2);
+      struct node *method_header = (sym->node) ? getchild(sym->node, 0) : NULL;
+      struct node *method_params =
+          (method_header) ? getchild(method_header, 2) : NULL;
 
       if (method_params != NULL && method_params->children != NULL) {
         struct node_list *p_list = method_params->children->next;
@@ -813,21 +878,35 @@ struct symbol_list *find_correspondent_method(char *call_identifier,
 }
 
 void check_var_decl(struct node *var_decl, struct symbol_list *local_table) {
-  struct node *type = getchild(var_decl, 0);
-  enum type nodes_type = category_type(type->category);
+  if (var_decl == NULL || local_table == NULL) {
+    return;
+  }
+
+  struct node *type_node = getchild(var_decl, 0);
+  if (type_node == NULL) {
+    return;
+  }
+  enum type nodes_type = category_type(type_node->category);
 
   int i = 1;
-  struct node *id;
-  while ((id = getchild(var_decl, i)) != NULL) {
-    if (strcmp(id->token, "_") == 0) {
-      is_reserved_underscore(id);
+  struct node *id_node;
+
+  while ((id_node = getchild(var_decl, i)) != NULL) {
+
+    if (id_node->token == NULL) {
+      i++;
+      continue;
+    }
+
+    if (strcmp(id_node->token, "_") == 0) {
+      is_reserved_underscore(id_node);
     } else {
-      if (search_symbol(local_table, id->token) != NULL) {
-        printf("Line %d, col %d: Symbol %s already defined\n", id->line,
-               id->column, id->token);
+      if (search_symbol(local_table, id_node->token) != NULL) {
+        printf("Line %d, col %d: Symbol %s already defined\n", id_node->line,
+               id_node->column, id_node->token);
         semantic_errors++;
       } else {
-        insert_symbol(local_table, id->token, nodes_type, id);
+        insert_symbol(local_table, id_node->token, nodes_type, id_node);
       }
     }
     i++;
@@ -872,12 +951,23 @@ void check_parameters(struct node *parameters,
 
 void check_field_decl(struct node *field_decl,
                       struct symbol_list *global_table) {
+
+  if (field_decl == NULL || global_table == NULL) {
+    return;
+  }
   struct node *type_node = getchild(field_decl, 0);
+  if (type_node == NULL) {
+    return;
+  }
   enum type field_type = category_type(type_node->category);
 
   int i = 1;
   struct node *id_node;
   while ((id_node = getchild(field_decl, i)) != NULL) {
+    if (id_node->token == NULL) {
+      i++;
+      continue;
+    }
     if (!is_reserved_underscore(id_node)) {
 
       struct symbol_list *found = search_symbol(global_table, id_node->token);
@@ -900,9 +990,17 @@ void check_field_decl(struct node *field_decl,
 
 // semantic analysis begins here, with the AST root node
 int check_program(struct node *program) {
+  if (program == NULL || program->children == NULL) {
+    return semantic_errors;
+  }
+
   struct node *class_id = getchild(program, 0);
 
   symbol_table = (struct symbol_list *)malloc(sizeof(struct symbol_list));
+  symbol_table->next = NULL;
+  symbol_table->identifier = NULL;
+  symbol_table->node = NULL;
+  symbol_table->type = undef_type;
   symbol_table->next = NULL;
   if (class_id != NULL && class_id->token != NULL) {
     symbol_table->identifier = strdup(class_id->token);
@@ -915,7 +1013,6 @@ int check_program(struct node *program) {
       add_method_to_table(child->node);
     } else if (child->node->category == FieldDecl) {
       check_field_decl(child->node, symbol_table);
-      // add_field_decl(child->node);
     }
   }
 
@@ -931,9 +1028,13 @@ int check_program(struct node *program) {
 // insert a new symbol in the list, unless it is already there
 struct symbol_list *insert_symbol(struct symbol_list *table, char *identifier,
                                   enum type type, struct node *node) {
+  if (table == NULL) {
+    return NULL;
+  }
+
   struct symbol_list *new =
       (struct symbol_list *)malloc(sizeof(struct symbol_list));
-  new->identifier = strdup(identifier);
+  new->identifier = (identifier != NULL) ? strdup(identifier) : NULL;
   new->type = type;
   new->node = node;
   new->next = NULL;
@@ -947,12 +1048,13 @@ struct symbol_list *insert_symbol(struct symbol_list *table, char *identifier,
 
 // look up a symbol by its identifier
 struct symbol_list *search_symbol(struct symbol_list *table, char *identifier) {
-  if (identifier == NULL) {
+  if (identifier == NULL || table == NULL) {
     return NULL;
   }
   struct symbol_list *symbol;
   for (symbol = table->next; symbol != NULL; symbol = symbol->next)
-    if (strcmp(symbol->identifier, identifier) == 0)
+    if (symbol->identifier != NULL &&
+        strcmp(symbol->identifier, identifier) == 0)
       return symbol;
   return NULL;
 }
@@ -1016,38 +1118,54 @@ bool is_reserved_underscore(struct node *id_node) {
 }
 
 void print_tables(struct node *program) {
-  printf("===== Class %s Symbol Table =====\n", symbol_table->identifier);
+  if (!symbol_table)
+    return;
+
+  printf("===== Class %s Symbol Table =====\n",
+         symbol_table->identifier ? symbol_table->identifier : "Unknown");
+
   struct symbol_list *s = symbol_table->next;
   while (s != NULL) {
-    if (s->node != NULL && s->node->category == MethodDecl) {
-      printf("%s\t", s->identifier);
-      print_method_params(s->node);
-      printf("\t%s\n", type_to_string(s->type));
-    } else {
-      printf("%s\t\t%s\n", s->identifier, type_to_string(s->type));
+    if (s->identifier) {
+      if (s->node != NULL && s->node->category == MethodDecl) {
+        printf("%s\t", s->identifier);
+        print_method_params(s->node);
+        printf("\t%s\n", type_to_string(s->type));
+      } else {
+        printf("%s\t\t%s\n", s->identifier, type_to_string(s->type));
+      }
     }
     s = s->next;
   }
   printf("\n");
 
+  if (!program || !program->children)
+    return;
+
   struct node_list *child = program->children->next;
   while (child != NULL) {
-    if (child->node->category == MethodDecl) {
+    if (child->node && child->node->category == MethodDecl) {
       if (!child->node->is_duplicate && child->node->local_symbols != NULL) {
         struct node *header = getchild(child->node, 0);
-        char *m_name = getchild(header, 1)->token;
+        if (header) {
+          struct node *id_node = getchild(header, 1);
+          char *m_name =
+              (id_node && id_node->token) ? id_node->token : "unknown";
 
-        printf("===== Method %s", m_name);
-        print_method_params(child->node);
-        printf(" Symbol Table =====\n");
+          printf("===== Method %s", m_name);
+          print_method_params(child->node);
+          printf(" Symbol Table =====\n");
 
-        struct symbol_list *ls = child->node->local_symbols->next;
-        while (ls != NULL) {
-          printf("%s\t\t%s%s\n", ls->identifier, type_to_string(ls->type),
-                 ls->is_parameter ? "\tparam" : "");
-          ls = ls->next;
+          struct symbol_list *ls = child->node->local_symbols->next;
+          while (ls != NULL) {
+            if (ls->identifier) {
+              printf("%s\t\t%s%s\n", ls->identifier, type_to_string(ls->type),
+                     ls->is_parameter ? "\tparam" : "");
+            }
+            ls = ls->next;
+          }
+          printf("\n");
         }
-        printf("\n");
       }
     }
     child = child->next;
