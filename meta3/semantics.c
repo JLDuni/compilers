@@ -97,6 +97,29 @@ void add_method_to_table(struct node *method_decl) {
   }
 }
 
+void add_field_decl(struct node *field_decl) {
+  category type = getchild(field_decl, 0)->category;
+  struct node_list *children = field_decl->children->next->next;
+  while (children != NULL) {
+    if (!is_reserved_underscore(children->node)) {
+      struct symbol_list *sym =
+          search_symbol(symbol_table, children->node->token);
+
+      if (sym != NULL && sym->node->category == FieldDecl &&
+          sym->node != NULL) {
+        printf("Line %d, col %d: Symbol %s already defined\n",
+               children->node->line, children->node->column,
+               children->node->token);
+        semantic_errors++;
+      } else {
+        insert_symbol(symbol_table, sym->node->token, category_type(type),
+                      field_decl);
+      }
+    }
+    children = children->next;
+  }
+}
+
 void check_method_semantics(struct node *method_decl) {
 
   if (method_decl->is_duplicate) {
@@ -213,9 +236,9 @@ void check_statement(struct node *statement_body,
   case While:
     check_expression(expression, local_table);
     if (expression->type != boolean_type) {
-      printf("Line %d, col %d: Incompatible type %s in %s statement\n",
+      printf("Line %d, col %d: Incompatible type %s in while statement\n",
              expression->line, expression->column,
-             type_to_string(expression->type), expression->token);
+             type_to_string(expression->type));
       semantic_errors++;
     }
     check_statement(getchild(statement_body, 1), local_table);
@@ -360,9 +383,21 @@ void check_expression(struct node *expr, struct symbol_list *local_scope) {
     break;
 
   case Identifier: {
-    struct symbol_list *sym = search_symbol(local_scope, expr->token);
-    if (sym == NULL) {
-      sym = search_symbol(symbol_table, expr->token);
+    struct symbol_list *sym = NULL;
+
+    sym = search_symbol(local_scope, expr->token);
+
+    if (sym == NULL && symbol_table != NULL) {
+      struct symbol_list *curr = symbol_table->next;
+      while (curr != NULL) {
+        if (curr->identifier && strcmp(curr->identifier, expr->token) == 0) {
+          if (curr->node && curr->node->category == FieldDecl) {
+            sym = curr;
+            break;
+          }
+        }
+        curr = curr->next;
+      }
     }
 
     if (sym != NULL) {
@@ -844,12 +879,19 @@ void check_field_decl(struct node *field_decl,
   struct node *id_node;
   while ((id_node = getchild(field_decl, i)) != NULL) {
     if (!is_reserved_underscore(id_node)) {
-      if (search_symbol(global_table, id_node->token) != NULL) {
-        printf("Line %d, col %d: Symbol %s already defined\n", id_node->line,
-               id_node->column, id_node->token);
-        semantic_errors++;
+
+      struct symbol_list *found = search_symbol(global_table, id_node->token);
+
+      if (found != NULL) {
+        if (found->node != NULL && found->node->category == FieldDecl) {
+          printf("Line %d, col %d: Symbol %s already defined\n", id_node->line,
+                 id_node->column, id_node->token);
+          semantic_errors++;
+        } else {
+          insert_symbol(global_table, id_node->token, field_type, field_decl);
+        }
       } else {
-        insert_symbol(global_table, id_node->token, field_type, NULL);
+        insert_symbol(global_table, id_node->token, field_type, field_decl);
       }
     }
     i++;
@@ -873,6 +915,7 @@ int check_program(struct node *program) {
       add_method_to_table(child->node);
     } else if (child->node->category == FieldDecl) {
       check_field_decl(child->node, symbol_table);
+      // add_field_decl(child->node);
     }
   }
 
