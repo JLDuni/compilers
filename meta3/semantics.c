@@ -64,6 +64,10 @@ int compare_parameters(struct node *params1, struct node *params2) {
     struct node *t1 = getchild(p1->node, 0);
     struct node *t2 = getchild(p2->node, 0);
 
+    if (t1 == NULL || t2 == NULL) {
+      return 0;
+    }
+
     if (category_type(t1->category) != category_type(t2->category)) {
       return 0;
     }
@@ -844,6 +848,10 @@ struct symbol_list *find_correspondent_method(char *call_identifier,
         while (p_arg != NULL && p_param != NULL) {
           enum type arg_t = p_arg->node->type;
           struct node *param_type_node = getchild(p_param->node, 0);
+          if (param_type_node == NULL) {
+            is_compatible = 0;
+            break;
+          }
           enum type param_t = category_type(param_type_node->category);
 
           if (arg_t != param_t) {
@@ -939,6 +947,10 @@ void check_parameters(struct node *parameters,
   while (p_list != NULL) {
     struct node *id = getchild(p_list->node, 1);
     struct node *type_node = getchild(p_list->node, 0);
+    if (type_node == NULL) {
+      p_list = p_list->next;
+      continue;
+    }
 
     if (id != NULL && strcmp(id->token, "_") != 0) {
       if (search_symbol(scope_table, id->token) == NULL) {
@@ -1053,6 +1065,9 @@ struct symbol_list *insert_symbol(struct symbol_list *table, char *identifier,
 
   struct symbol_list *new =
       (struct symbol_list *)malloc(sizeof(struct symbol_list));
+  if (new == NULL) {
+    return NULL;
+  }
   new->identifier = (identifier != NULL) ? strdup(identifier) : NULL;
   new->type = type;
   new->is_parameter = 0;
