@@ -79,8 +79,10 @@ int compare_parameters(struct node *params1, struct node *params2) {
 }
 
 void add_method_to_table(struct node *method_decl) {
-  if (method_decl == NULL)
+  if (method_decl == NULL || method_decl->children == NULL)
     return;
+
+  method_decl->is_duplicate = 0;
 
   struct node *method_header = getchild(method_decl, 0);
   if (method_header == NULL)
@@ -391,7 +393,7 @@ void check_expression(struct node *expr, struct symbol_list *local_scope) {
     }
     char *clean_token = clean_token_underscores(expr->token);
     long long value = atoll(clean_token);
-    if (value > 2147483649LL || (value == 2147483648LL)) {
+    if (value > 2147483648LL || (value == 2147483648LL)) {
       printf("Line %d, col %d: Number %s out of bounds\n", expr->line,
              expr->column, expr->token);
       semantic_errors++;
@@ -945,20 +947,20 @@ void check_parameters(struct node *parameters,
       (parameters->children != NULL) ? parameters->children->next : NULL;
 
   while (p_list != NULL) {
-    struct node *id = getchild(p_list->node, 1);
-    struct node *type_node = getchild(p_list->node, 0);
-    if (type_node == NULL) {
-      p_list = p_list->next;
-      continue;
-    }
+    if (p_list->node != NULL) {
+      struct node *type_node = getchild(p_list->node, 0);
+      struct node *id = getchild(p_list->node, 1);
 
-    if (id != NULL && strcmp(id->token, "_") != 0) {
-      if (search_symbol(scope_table, id->token) == NULL) {
-        struct symbol_list *s =
-            insert_symbol(scope_table, id->token,
-                          category_type(type_node->category), type_node);
-        if (s)
-          s->is_parameter = 1;
+      if (id != NULL && id->token != NULL && strcmp(id->token, "_") != 0) {
+
+        if (type_node != NULL &&
+            search_symbol(scope_table, id->token) == NULL) {
+          struct symbol_list *s =
+              insert_symbol(scope_table, id->token,
+                            category_type(type_node->category), type_node);
+          if (s)
+            s->is_parameter = 1;
+        }
       }
     }
     p_list = p_list->next;
@@ -967,7 +969,8 @@ void check_parameters(struct node *parameters,
 
 void check_field_decl(struct node *field_decl,
                       struct symbol_list *global_table) {
-  if (field_decl == NULL || global_table == NULL)
+  if (field_decl == NULL || global_table == NULL ||
+      field_decl->children == NULL)
     return;
 
   struct node *type_node = getchild(field_decl, 0);
@@ -1156,8 +1159,7 @@ void print_tables(struct node *program) {
   if (!symbol_table)
     return;
 
-  printf("===== Class %s Symbol Table =====\n",
-         symbol_table->identifier ? symbol_table->identifier : "Unknown");
+  printf("===== Class %s Symbol Table =====\n", symbol_table->identifier);
 
   struct symbol_list *s = symbol_table->next;
   while (s != NULL) {
