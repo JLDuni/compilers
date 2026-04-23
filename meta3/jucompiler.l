@@ -214,7 +214,7 @@ int main(int argc, char *argv[]) {
     while(yylex() != 0);
   } else {
     yyparse();
-    if (run_semantics) {
+    if (run_semantics && has_errors == 0) {
       check_program(ast);
       if(annotated_ast) print_tables(ast);
       show(ast, 0);

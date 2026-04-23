@@ -53,10 +53,12 @@ void verify_parameters(struct node *parameters) {
 }
 
 int compare_parameters(struct node *params1, struct node *params2) {
-  struct node_list *p1 =
-      params1->children != NULL ? params1->children->next : NULL;
-  struct node_list *p2 =
-      params2->children != NULL ? params2->children->next : NULL;
+  struct node_list *p1 = (params1 != NULL && params1->children != NULL)
+                             ? params1->children->next
+                             : NULL;
+  struct node_list *p2 = (params2 != NULL && params2->children != NULL)
+                             ? params2->children->next
+                             : NULL;
 
   while (p1 != NULL && p2 != NULL) {
     struct node *t1 = getchild(p1->node, 0);
@@ -132,14 +134,16 @@ void add_method_to_table(struct node *method_decl) {
 void check_method_semantics(struct node *method_decl) {
   if (method_decl == NULL)
     return;
-
-  if (method_decl->is_duplicate) {
+  if (method_decl->is_duplicate)
     return;
-  }
 
   struct node *method_header = getchild(method_decl, 0);
+  if (method_header == NULL)
+    return;
 
   struct node *type_node = getchild(method_header, 0);
+  if (type_node == NULL)
+    return;
 
   struct node *parameters = getchild(method_header, 2);
   struct node *body = getchild(method_decl, 1);
@@ -951,35 +955,46 @@ void check_parameters(struct node *parameters,
 
 void check_field_decl(struct node *field_decl,
                       struct symbol_list *global_table) {
+  if (field_decl == NULL || global_table == NULL)
+    return;
 
-  if (field_decl == NULL || global_table == NULL) {
-    return;
-  }
   struct node *type_node = getchild(field_decl, 0);
-  if (type_node == NULL) {
+  if (type_node == NULL)
     return;
-  }
+
   enum type field_type = category_type(type_node->category);
 
   int i = 1;
   struct node *id_node;
+
   while ((id_node = getchild(field_decl, i)) != NULL) {
     if (id_node->token == NULL) {
       i++;
       continue;
     }
-    if (!is_reserved_underscore(id_node)) {
 
-      struct symbol_list *found = search_symbol(global_table, id_node->token);
+    if (strcmp(id_node->token, "_") == 0) {
+      is_reserved_underscore(id_node);
+    } else {
 
-      if (found != NULL) {
-        if (found->node != NULL && found->node->category == FieldDecl) {
-          printf("Line %d, col %d: Symbol %s already defined\n", id_node->line,
-                 id_node->column, id_node->token);
-          semantic_errors++;
-        } else {
-          insert_symbol(global_table, id_node->token, field_type, field_decl);
+      int is_duplicate = 0;
+      struct symbol_list *curr = global_table->next;
+
+      while (curr != NULL) {
+        if (curr->identifier != NULL &&
+            strcmp(curr->identifier, id_node->token) == 0) {
+          if (curr->node != NULL && curr->node->category == FieldDecl) {
+            is_duplicate = 1;
+            break;
+          }
         }
+        curr = curr->next;
+      }
+
+      if (is_duplicate) {
+        printf("Line %d, col %d: Symbol %s already defined\n", id_node->line,
+               id_node->column, id_node->token);
+        semantic_errors++;
       } else {
         insert_symbol(global_table, id_node->token, field_type, field_decl);
       }
@@ -1009,17 +1024,21 @@ int check_program(struct node *program) {
   struct node_list *child = program->children;
 
   while ((child = child->next) != NULL) {
-    if (child->node->category == MethodDecl) {
-      add_method_to_table(child->node);
-    } else if (child->node->category == FieldDecl) {
-      check_field_decl(child->node, symbol_table);
+    if (child->node != NULL) {
+      if (child->node->category == MethodDecl) {
+        add_method_to_table(child->node);
+      } else if (child->node->category == FieldDecl) {
+        check_field_decl(child->node, symbol_table);
+      }
     }
   }
 
   child = program->children;
   while ((child = child->next) != NULL) {
-    if (child->node->category == MethodDecl) {
-      check_method_semantics(child->node);
+    if (child->node != NULL) {
+      if (child->node->category == MethodDecl) {
+        check_method_semantics(child->node);
+      }
     }
   }
   return semantic_errors;
@@ -1036,6 +1055,7 @@ struct symbol_list *insert_symbol(struct symbol_list *table, char *identifier,
       (struct symbol_list *)malloc(sizeof(struct symbol_list));
   new->identifier = (identifier != NULL) ? strdup(identifier) : NULL;
   new->type = type;
+  new->is_parameter = 0;
   new->node = node;
   new->next = NULL;
   struct symbol_list *symbol = table;
@@ -1174,28 +1194,28 @@ void print_tables(struct node *program) {
 
 void print_method_params(struct node *method_decl) {
   printf("(");
-  struct node *method_header = getchild(method_decl, 0);
-  struct node *params = getchild(method_header, 2);
+  if (method_decl != NULL) {
+    struct node *method_header = getchild(method_decl, 0);
 
-  if (params != NULL && params->children != NULL &&
-      params->children->next != NULL) {
+    if (method_header != NULL) {
+      struct node *params = getchild(method_header, 2);
 
-    struct node_list *curr_param = params->children->next;
-
-    while (curr_param != NULL) {
-      struct node *param_decl = curr_param->node;
-
-      if (param_decl != NULL) {
-        struct node *type_node = getchild(param_decl, 0);
-        if (type_node != NULL) {
-          printf("%s", type_to_string(category_type(type_node->category)));
+      if (params != NULL && params->children != NULL &&
+          params->children->next != NULL) {
+        struct node_list *curr_param = params->children->next;
+        while (curr_param != NULL) {
+          struct node *param_decl = curr_param->node;
+          if (param_decl != NULL) {
+            struct node *type_node = getchild(param_decl, 0);
+            if (type_node != NULL) {
+              printf("%s", type_to_string(category_type(type_node->category)));
+            }
+          }
+          if (curr_param->next != NULL)
+            printf(",");
+          curr_param = curr_param->next;
         }
       }
-
-      if (curr_param->next != NULL) {
-        printf(",");
-      }
-      curr_param = curr_param->next;
     }
   }
   printf(")");
