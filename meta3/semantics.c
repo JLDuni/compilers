@@ -489,10 +489,6 @@ void check_expression(struct node *expr, struct symbol_list *local_scope) {
 
   case Not: {
     struct node *child = getchild(expr, 0);
-    if (child == NULL) {
-      expr->type = undef_type;
-      break;
-    }
     enum type t = child->type;
 
     expr->type = boolean_type;
@@ -513,10 +509,10 @@ void check_expression(struct node *expr, struct symbol_list *local_scope) {
   case Mod: {
     struct node *c1 = getchild(expr, 0);
     struct node *c2 = getchild(expr, 1);
-    if (c1 == NULL || c2 == NULL) {
-      expr->type = undef_type;
-      break;
-    }
+    // if (c1 == NULL || c2 == NULL) {
+    //   expr->type = undef_type;
+    //   break;
+    // }
     enum type t1 = c1->type;
     enum type t2 = c2->type;
 
@@ -540,10 +536,7 @@ void check_expression(struct node *expr, struct symbol_list *local_scope) {
   case Ge: {
     struct node *c1 = getchild(expr, 0);
     struct node *c2 = getchild(expr, 1);
-    if (c1 == NULL || c2 == NULL) {
-      expr->type = undef_type;
-      break;
-    }
+
     enum type t1 = c1->type;
     enum type t2 = c2->type;
 
@@ -565,6 +558,7 @@ void check_expression(struct node *expr, struct symbol_list *local_scope) {
   case Ne: {
     enum type t1 = getchild(expr, 0)->type;
     enum type t2 = getchild(expr, 1)->type;
+
     expr->type = boolean_type;
 
     int valid = 0;
@@ -620,10 +614,7 @@ void check_expression(struct node *expr, struct symbol_list *local_scope) {
     struct node *id_node = getchild(expr, 0);
     struct node *index_expr = getchild(expr, 1);
 
-    if (id_node == NULL || index_expr == NULL) {
-      expr->type = undef_type;
-      break;
-    }
+    expr->type = integer_type;
 
     enum type t1 = id_node->type;
     enum type t2 = index_expr->type;
@@ -634,36 +625,54 @@ void check_expression(struct node *expr, struct symbol_list *local_scope) {
              expr->line, expr->column, type_to_string(t1), type_to_string(t2));
       semantic_errors++;
     }
-    expr->type = integer_type;
     break;
   }
 
   case Length: {
     struct node *child = getchild(expr, 0);
 
-    if (child == NULL) {
-      expr->type = undef_type;
-      break;
-    }
+    expr->type = integer_type;
 
     enum type t = child->type;
+    int valid = 0;
+    if (t == string_array_type || t == string_type) {
+      valid = 1;
+    } else {
+      valid = 0;
+    }
 
-    if (t != string_array_type) {
+    if (!valid) {
       printf("Line %d, col %d: Operator .length cannot be applied to type %s\n",
              expr->line, expr->column, type_to_string(t));
       semantic_errors++;
     }
-    expr->type = integer_type;
     break;
   }
 
   case Call: {
     struct node *id_node = getchild(expr, 0);
-    int compatible_count_methods = 0;
-    struct symbol_list *sym = find_correspondent_method(
-        id_node->token, expr, &compatible_count_methods);
+    int is_compatible = 0;
+    struct symbol_list *sym =
+        find_correspondent_method(id_node->token, expr, &is_compatible);
 
-    if (sym == NULL) {
+    if (sym == NULL && is_compatible == 1) {
+      printf("Line %d, col %d: Reference to method %s", id_node->line,
+             id_node->column, id_node->token);
+
+      printf("(");
+      struct node_list const *arg_ptr = expr->children->next->next;
+      while (arg_ptr != NULL) {
+        printf("%s", type_to_string(arg_ptr->node->type));
+        if (arg_ptr->next != NULL)
+          printf(",");
+        arg_ptr = arg_ptr->next;
+      }
+      printf(") is ambiguous\n");
+      expr->type = undef_type;
+      id_node->type = undef_type;
+      semantic_errors++;
+
+    } else if (sym == NULL && is_compatible == 0) {
       printf("Line %d, col %d: Cannot find symbol %s(", id_node->line,
              id_node->column, id_node->token);
 
@@ -681,23 +690,8 @@ void check_expression(struct node *expr, struct symbol_list *local_scope) {
       expr->type = undef_type;
       id_node->type = undef_type;
       semantic_errors++;
-    } else if (compatible_count_methods > 1) {
-      printf("Line %d, col %d: Reference to method %s", id_node->line,
-             id_node->column, id_node->token);
 
-      printf("(");
-      struct node_list const *arg_ptr = expr->children->next->next;
-      while (arg_ptr != NULL) {
-        printf("%s", type_to_string(arg_ptr->node->type));
-        if (arg_ptr->next != NULL)
-          printf(",");
-        arg_ptr = arg_ptr->next;
-      }
-      printf(") is ambiguous\n");
-      expr->type = undef_type;
-      id_node->type = undef_type;
-      semantic_errors++;
-    } else {
+    } else if (sym != NULL) {
       expr->type = sym->type;
       id_node->type = sym->type;
 
@@ -721,6 +715,7 @@ void check_expression(struct node *expr, struct symbol_list *local_scope) {
         }
       }
       strcat(buffer, ")");
+
       id_node->parameter_types_str = strdup(buffer);
     }
     break;
@@ -752,7 +747,7 @@ void check_expression(struct node *expr, struct symbol_list *local_scope) {
   }
 
   default:
-    // expr->type = undef_type;
+    expr->type = undef_type;
     break;
   }
 }
@@ -806,26 +801,22 @@ char *get_symbol_category(category cat) {
 
 struct symbol_list *find_correspondent_method(char *call_identifier,
                                               struct node *call_node,
-                                              int *compatible_count) {
+                                              int *is_compatible) {
   if (call_identifier == NULL || call_node == NULL)
     return NULL;
 
   struct symbol_list *curr = symbol_table;
   struct symbol_list *exact_match = NULL;
-  struct symbol_list *inexact_match = NULL;
-  *compatible_count = 0;
+  struct symbol_list *compatible_match = NULL;
+  int compatible_count = 0;
 
-  struct node_list *args_list =
-      (call_node->children != NULL && call_node->children->next != NULL)
-          ? call_node->children->next->next
-          : NULL;
-
+  struct node_list *args_list = call_node->children->next->next;
   int num_args_passed = count_list(call_node->children) - 2;
 
   while (curr != NULL) {
     if (curr->identifier != NULL &&
         strcmp(curr->identifier, call_identifier) == 0 && curr->node != NULL &&
-        curr->node->category == MethodDecl) {
+        curr->node->category == MethodDecl && !curr->node->is_duplicate) {
 
       struct node *params = getchild(getchild(curr->node, 0), 2);
       int num_params_expected = count_list(params->children) - 1;
@@ -835,13 +826,13 @@ struct symbol_list *find_correspondent_method(char *call_identifier,
         struct node_list *p_param = params->children->next;
 
         int is_exact = 1;
-        int is_compatible = 1;
+        int local_is_compatible = 1;
 
         while (p_arg != NULL && p_param != NULL) {
           enum type arg_t = p_arg->node->type;
           struct node *param_type_node = getchild(p_param->node, 0);
           if (param_type_node == NULL) {
-            is_compatible = 0;
+            local_is_compatible = 0;
             break;
           }
           enum type param_t = category_type(param_type_node->category);
@@ -850,20 +841,20 @@ struct symbol_list *find_correspondent_method(char *call_identifier,
             is_exact = 0;
 
             if (!(arg_t == integer_type && param_t == double_type)) {
-              is_compatible = 0;
+              local_is_compatible = 0;
             }
           }
           p_arg = p_arg->next;
           p_param = p_param->next;
         }
 
-        if (is_compatible) {
+        if (local_is_compatible) {
           if (is_exact) {
             exact_match = curr;
             break;
           } else {
-            inexact_match = curr;
-            (*compatible_count)++;
+            compatible_match = curr;
+            compatible_count++;
           }
         }
       }
@@ -872,12 +863,21 @@ struct symbol_list *find_correspondent_method(char *call_identifier,
   }
 
   if (exact_match != NULL) {
-    *compatible_count = 1;
+    *is_compatible = 0;
     return exact_match;
-  } else if (*compatible_count == 1) {
-    return inexact_match;
   }
 
+  if (compatible_count > 1) {
+    *is_compatible = 1;
+    return NULL;
+  }
+
+  if (compatible_count == 1) {
+    *is_compatible = 1;
+    return compatible_match;
+  }
+
+  *is_compatible = 0;
   return NULL;
 }
 
