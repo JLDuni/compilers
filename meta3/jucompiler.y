@@ -271,9 +271,9 @@ OperationExpr: OperationExpr PLUS OperationExpr    { $$ = CREATE_NODE(Add, NULL,
     | OperationExpr LE OperationExpr      { $$ = CREATE_NODE(Le, NULL, @2);  addchildren($$, append(newlist($1), $3)); }
     | OperationExpr LT OperationExpr      { $$ = CREATE_NODE(Lt, NULL, @2);  addchildren($$, append(newlist($1), $3)); }
 
-    | MINUS OperationExpr %prec UNARY_MINUS { $$ = CREATE_NODE(Minus, NULL, @$); addchild($$, $2); }
-    | PLUS OperationExpr %prec UNARY_PLUS   { $$ = CREATE_NODE(Plus, NULL, @$);  addchild($$, $2); }
-    | NOT OperationExpr                     { $$ = CREATE_NODE(Not, NULL, @$);   addchild($$, $2); }
+    | MINUS OperationExpr %prec UNARY_MINUS { $$ = CREATE_NODE(Minus, NULL, @1); addchild($$, $2); }
+    | PLUS OperationExpr %prec UNARY_PLUS   { $$ = CREATE_NODE(Plus, NULL, @1);  addchild($$, $2); }
+    | NOT OperationExpr                     { $$ = CREATE_NODE(Not, NULL, @1);   addchild($$, $2); }
     | IDENTIFIER                            { $$ = CREATE_NODE(Identifier, $1, @1); }
     | IDENTIFIER DOTLENGTH                  { $$ = CREATE_NODE(Length, NULL, @2); addchild($$, CREATE_NODE(Identifier, $1, @1)); }
     | NATURAL                               { $$ = CREATE_NODE(Natural, $1, @1); }

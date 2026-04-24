@@ -74,7 +74,7 @@ void show(struct node *node, int depth) {
     }
   }
 
-  if (annotated_ast && node->parameter_types_str != NULL) {
+  if (annotated_ast && node->parameter_types_str != NULL && node->type != undef_type) {
     printf(" - %s", node->parameter_types_str);
   } else if (annotated_ast && node->type != no_type) {
     printf(" - %s", type_to_string(node->type));
