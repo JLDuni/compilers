@@ -352,7 +352,7 @@ void check_statement(struct node *statement_body,
     if (statement_body->children != NULL) {
       struct node_list *curr = statement_body->children->next;
       while (curr != NULL) {
-        if (curr->node != NULL) { // PROTEÇÃO VITAL
+        if (curr->node != NULL) {
           if (curr->node->category == VarDecl)
             check_var_decl(curr->node, local_table);
           else
@@ -387,19 +387,21 @@ void check_expression(struct node *expr, struct symbol_list *local_scope) {
   }
 
   switch (expr->category) {
-  case Natural:
+  case Natural: {
     if (expr->token == NULL) {
       break;
     }
-    char *clean_token = clean_token_underscores(expr->token);
+    char const *clean_token = clean_token_underscores(expr->token);
     long long value = atoll(clean_token);
-    if (value > 2147483648LL || (value == 2147483648LL)) {
+    if (value >= 2147483648LL) {
       printf("Line %d, col %d: Number %s out of bounds\n", expr->line,
              expr->column, expr->token);
       semantic_errors++;
     }
     expr->type = integer_type;
     break;
+  }
+
   case Decimal: {
     char *clean = clean_token_underscores(expr->token);
     double val = strtod(clean, NULL);
@@ -475,14 +477,12 @@ void check_expression(struct node *expr, struct symbol_list *local_scope) {
 
     if (t == integer_type || t == double_type) {
       expr->type = t;
-    } else if (t != undef_type) {
+    } else {
       printf("Line %d, col %d: Operator %s cannot be applied to type %s\n",
              expr->line, expr->column, get_symbol_category(expr->category),
              type_to_string(t));
       expr->type = undef_type;
       semantic_errors++;
-    } else {
-      expr->type = undef_type;
     }
     break;
   }
@@ -498,12 +498,11 @@ void check_expression(struct node *expr, struct symbol_list *local_scope) {
     expr->type = boolean_type;
 
     if (t != boolean_type) {
-      if (t != undef_type) {
-        printf("Line %d, col %d: Operator ! cannot be applied to type %s\n",
-               expr->line, expr->column, type_to_string(t));
-        semantic_errors++;
-      }
+      printf("Line %d, col %d: Operator ! cannot be applied to type %s\n",
+             expr->line, expr->column, type_to_string(t));
+      semantic_errors++;
     }
+
     break;
   }
 
@@ -554,13 +553,10 @@ void check_expression(struct node *expr, struct symbol_list *local_scope) {
     int is_numeric2 = (t2 == integer_type || t2 == double_type);
 
     if (!(is_numeric1 && is_numeric2)) {
-      if (t1 != undef_type && t2 != undef_type) {
-        printf(
-            "Line %d, col %d: Operator %s cannot be applied to types %s, %s\n",
-            expr->line, expr->column, get_symbol_category(expr->category),
-            type_to_string(t1), type_to_string(t2));
-        semantic_errors++;
-      }
+      printf("Line %d, col %d: Operator %s cannot be applied to types %s, %s\n",
+             expr->line, expr->column, get_symbol_category(expr->category),
+             type_to_string(t1), type_to_string(t2));
+      semantic_errors++;
     }
     break;
   }
@@ -595,20 +591,17 @@ void check_expression(struct node *expr, struct symbol_list *local_scope) {
     expr->type = boolean_type;
 
     if (t1 != boolean_type || t2 != boolean_type) {
-      if (!(t1 == undef_type && t2 == undef_type)) {
-        printf(
-            "Line %d, col %d: Operator %s cannot be applied to types %s, %s\n",
-            expr->line, expr->column, get_symbol_category(expr->category),
-            type_to_string(t1), type_to_string(t2));
-        semantic_errors++;
-      }
+      printf("Line %d, col %d: Operator %s cannot be applied to types %s, %s\n",
+             expr->line, expr->column, get_symbol_category(expr->category),
+             type_to_string(t1), type_to_string(t2));
+      semantic_errors++;
     }
     break;
   }
 
+  case Xor:
   case Lshift:
-  case Rshift:
-  case Xor: {
+  case Rshift: {
     enum type t1 = getchild(expr, 0)->type;
     enum type t2 = getchild(expr, 1)->type;
 
@@ -628,7 +621,7 @@ void check_expression(struct node *expr, struct symbol_list *local_scope) {
     struct node *index_expr = getchild(expr, 1);
 
     if (id_node == NULL || index_expr == NULL) {
-      expr->type = integer_type;
+      expr->type = undef_type;
       break;
     }
 
@@ -649,7 +642,7 @@ void check_expression(struct node *expr, struct symbol_list *local_scope) {
     struct node *child = getchild(expr, 0);
 
     if (child == NULL) {
-      expr->type = integer_type;
+      expr->type = undef_type;
       break;
     }
 
@@ -670,23 +663,7 @@ void check_expression(struct node *expr, struct symbol_list *local_scope) {
     struct symbol_list *sym = find_correspondent_method(
         id_node->token, expr, &compatible_count_methods);
 
-    if (compatible_count_methods > 1) {
-      printf("Line %d, col %d: Reference to method %s", id_node->line,
-             id_node->column, id_node->token);
-
-      printf("(");
-      struct node_list *arg_ptr = expr->children->next->next;
-      while (arg_ptr != NULL) {
-        printf("%s", type_to_string(arg_ptr->node->type));
-        if (arg_ptr->next != NULL)
-          printf(",");
-        arg_ptr = arg_ptr->next;
-      }
-      printf(") is ambiguous\n");
-      expr->type = undef_type;
-      id_node->type = undef_type;
-      semantic_errors++;
-    } else if (sym == NULL) {
+    if (sym == NULL) {
       printf("Line %d, col %d: Cannot find symbol %s(", id_node->line,
              id_node->column, id_node->token);
 
@@ -704,11 +681,27 @@ void check_expression(struct node *expr, struct symbol_list *local_scope) {
       expr->type = undef_type;
       id_node->type = undef_type;
       semantic_errors++;
+    } else if (compatible_count_methods > 1) {
+      printf("Line %d, col %d: Reference to method %s", id_node->line,
+             id_node->column, id_node->token);
+
+      printf("(");
+      struct node_list const *arg_ptr = expr->children->next->next;
+      while (arg_ptr != NULL) {
+        printf("%s", type_to_string(arg_ptr->node->type));
+        if (arg_ptr->next != NULL)
+          printf(",");
+        arg_ptr = arg_ptr->next;
+      }
+      printf(") is ambiguous\n");
+      expr->type = undef_type;
+      id_node->type = undef_type;
+      semantic_errors++;
     } else {
       expr->type = sym->type;
       id_node->type = sym->type;
 
-      char buffer[512] = "(";
+      char buffer[4096] = "(";
 
       struct node *method_header = (sym->node) ? getchild(sym->node, 0) : NULL;
       struct node *method_params =
@@ -751,18 +744,15 @@ void check_expression(struct node *expr, struct symbol_list *local_scope) {
     }
 
     if (!valid) {
-      if (!(t1 == undef_type && t2 == undef_type)) {
-        printf(
-            "Line %d, col %d: Operator = cannot be applied to types %s, %s\n",
-            expr->line, expr->column, type_to_string(t1), type_to_string(t2));
-        semantic_errors++;
-      }
+      printf("Line %d, col %d: Operator = cannot be applied to types %s, %s\n",
+             expr->line, expr->column, type_to_string(t1), type_to_string(t2));
+      semantic_errors++;
     }
     break;
   }
 
   default:
-    expr->type = undef_type;
+    // expr->type = undef_type;
     break;
   }
 }
@@ -806,11 +796,11 @@ char *get_symbol_category(category cat) {
   case Not:
     return "!";
   case Minus:
-    return "-"; // Unário
+    return "-";
   case Plus:
-    return "+"; // Unário
+    return "+";
   default:
-    return ""; // Retorno de segurança para não dar (null)
+    return "";
   }
 }
 
@@ -929,6 +919,9 @@ void check_var_decl(struct node *var_decl, struct symbol_list *local_table) {
 
 char *clean_token_underscores(char *token) {
   char *clean_token = malloc(strlen(token) + 1);
+  if (clean_token == NULL) {
+    return NULL;
+  }
   int j = 0;
   for (int i = 0; token[i] != '\0'; i++) {
     if (token[i] != '_') {
@@ -996,14 +989,15 @@ void check_field_decl(struct node *field_decl,
       struct symbol_list *curr = global_table->next;
 
       while (curr != NULL) {
-        if (curr->identifier != NULL &&
-            strcmp(curr->identifier, id_node->token) == 0) {
-          if (curr->node != NULL && curr->node->category == FieldDecl) {
-            is_duplicate = 1;
-            break;
+        if (curr->identifier != NULL) {
+          if (strcmp(curr->identifier, id_node->token) == 0) {
+            if (curr->node != NULL && curr->node->category == FieldDecl) {
+              is_duplicate = 1;
+              break;
+            }
           }
+          curr = curr->next;
         }
-        curr = curr->next;
       }
 
       if (is_duplicate) {
@@ -1027,6 +1021,9 @@ int check_program(struct node *program) {
   struct node *class_id = getchild(program, 0);
 
   symbol_table = (struct symbol_list *)malloc(sizeof(struct symbol_list));
+  if (symbol_table == NULL) {
+    return semantic_errors;
+  }
   symbol_table->next = NULL;
   symbol_table->identifier = NULL;
   symbol_table->node = NULL;

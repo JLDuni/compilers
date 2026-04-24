@@ -26,8 +26,14 @@ struct node *newnode(category category, char *token, int line, int column) {
   new->children = malloc(sizeof(struct node_list));
   if (new->children == NULL)
     return new;
+    
   new->line = line;
   new->column = column;
+  
+  new->parameter_types_str = NULL;
+  new->type = no_type;    
+  new->is_duplicate = 0;
+  new->local_symbols = NULL;
 
   new->children->node = NULL;
   new->children->next = NULL;
@@ -217,9 +223,9 @@ void free_ast(struct node *n) {
     free(temp);
   }
 
-  if (n->token != NULL) {
-    free(n->token);
-  }
+  // if (n->token != NULL) {
+  //   free(n->token);
+  // }
 
   free(n);
 }
