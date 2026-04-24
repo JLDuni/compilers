@@ -95,6 +95,11 @@ void add_method_to_table(struct node *method_decl) {
   if (method_id == NULL || method_id->token == NULL || type_node == NULL) {
     return;
   }
+  if (strcmp(method_id->token, "_") == 0) {
+    is_reserved_underscore(method_id);
+    method_decl->is_duplicate = 1;
+    method_decl->local_symbols = NULL;
+  }
 
   enum type return_type = category_type(type_node->category);
   int is_duplicate = 0;
@@ -107,7 +112,6 @@ void add_method_to_table(struct node *method_decl) {
     if (curr->identifier != NULL &&
         strcmp(curr->identifier, method_id->token) == 0) {
       if (curr->node != NULL && curr->node->category == MethodDecl) {
-
         struct node *existing_header = getchild(curr->node, 0);
         if (existing_header != NULL) {
           struct node *existing_params = getchild(existing_header, 2);
@@ -272,7 +276,7 @@ void check_statement(struct node *statement_body,
   struct node *expression = getchild(statement_body, 0);
 
   switch (statement_body->category) {
-  case If:
+  case If: {
     if (expression != NULL) {
       check_expression(expression, local_table);
       if (expression->type != boolean_type) {
@@ -285,6 +289,7 @@ void check_statement(struct node *statement_body,
     check_statement(getchild(statement_body, 1), local_table);
     check_statement(getchild(statement_body, 2), local_table);
     break;
+  }
 
   case While:
     if (expression != NULL) {
@@ -350,7 +355,7 @@ void check_statement(struct node *statement_body,
 
   case Block:
     if (statement_body->children != NULL) {
-      struct node_list *curr = statement_body->children->next;
+      struct node_list *curr = statement_body->children;
       while (curr != NULL) {
         if (curr->node != NULL) {
           if (curr->node->category == VarDecl)
@@ -388,17 +393,26 @@ void check_expression(struct node *expr, struct symbol_list *local_scope) {
 
   switch (expr->category) {
   case Natural: {
-    if (expr->token == NULL) {
+    if (expr->token == NULL)
       break;
-    }
+
     char const *clean_token = clean_token_underscores(expr->token);
-    long long value = atoll(clean_token);
-    if (value >= 2147483648LL) {
+    int len = strlen(clean_token);
+    int is_out_of_bounds = 0;
+
+    if (len > 10) {
+      is_out_of_bounds = 1;
+    } else if (len == 10 && strcmp(clean_token, "2147483648") >= 0) {
+      is_out_of_bounds = 1;
+    }
+
+    if (is_out_of_bounds) {
       printf("Line %d, col %d: Number %s out of bounds\n", expr->line,
              expr->column, expr->token);
       semantic_errors++;
     }
     expr->type = integer_type;
+    free((void *)clean_token);
     break;
   }
 
@@ -509,10 +523,6 @@ void check_expression(struct node *expr, struct symbol_list *local_scope) {
   case Mod: {
     struct node *c1 = getchild(expr, 0);
     struct node *c2 = getchild(expr, 1);
-    // if (c1 == NULL || c2 == NULL) {
-    //   expr->type = undef_type;
-    //   break;
-    // }
     enum type t1 = c1->type;
     enum type t2 = c2->type;
 
@@ -590,6 +600,7 @@ void check_expression(struct node *expr, struct symbol_list *local_scope) {
              type_to_string(t1), type_to_string(t2));
       semantic_errors++;
     }
+
     break;
   }
 
@@ -635,7 +646,7 @@ void check_expression(struct node *expr, struct symbol_list *local_scope) {
 
     enum type t = child->type;
     int valid = 0;
-    if (t == string_array_type || t == string_type) {
+    if (t == string_array_type) {
       valid = 1;
     } else {
       valid = 0;
@@ -996,8 +1007,8 @@ void check_field_decl(struct node *field_decl,
               break;
             }
           }
-          curr = curr->next;
         }
+        curr = curr->next;
       }
 
       if (is_duplicate) {
@@ -1028,8 +1039,9 @@ int check_program(struct node *program) {
   symbol_table->identifier = NULL;
   symbol_table->node = NULL;
   symbol_table->type = undef_type;
-  symbol_table->next = NULL;
+
   if (class_id != NULL && class_id->token != NULL) {
+    is_reserved_underscore(class_id);
     symbol_table->identifier = strdup(class_id->token);
   }
 

@@ -26,12 +26,12 @@ struct node *newnode(category category, char *token, int line, int column) {
   new->children = malloc(sizeof(struct node_list));
   if (new->children == NULL)
     return new;
-    
+
   new->line = line;
   new->column = column;
-  
+
   new->parameter_types_str = NULL;
-  new->type = no_type;    
+  new->type = no_type;
   new->is_duplicate = 0;
   new->local_symbols = NULL;
 
@@ -74,7 +74,7 @@ void show(struct node *node, int depth) {
     }
   }
 
-  if (annotated_ast && node->parameter_types_str != NULL && node->type != undef_type) {
+  if (annotated_ast && node->parameter_types_str != NULL) {
     printf(" - %s", node->parameter_types_str);
   } else if (annotated_ast && node->type != no_type) {
     printf(" - %s", type_to_string(node->type));
@@ -162,16 +162,22 @@ struct node *copy_node(struct node *n) {
   if (n == NULL)
     return NULL;
 
-  struct node *copy = malloc(sizeof(struct node));
+  struct node *copy = calloc(1, sizeof(struct node));
   if (copy == NULL)
     return NULL;
 
   copy->category = n->category;
+  copy->type = n->type;
+  copy->line = n->line;
+  copy->column = n->column;
+  copy->is_duplicate = n->is_duplicate;
 
   if (n->token != NULL) {
     copy->token = strdup(n->token);
-  } else {
-    copy->token = NULL;
+  }
+
+  if (n->parameter_types_str != NULL) {
+    copy->parameter_types_str = strdup(n->parameter_types_str);
   }
 
   copy->children = copy_list(n->children);
