@@ -212,9 +212,7 @@ void check_method(struct node *method_decl) {
   }
 
   if (!is_duplicate) {
-    if (symbol_table != NULL) {
-      insert_symbol(symbol_table, method_id->token, return_type, method_decl);
-    }
+    insert_symbol(symbol_table, method_id->token, return_type, method_decl);
 
     struct symbol_list *local_table = malloc(sizeof(struct symbol_list));
     if (local_table == NULL)
@@ -279,7 +277,7 @@ void check_statement(struct node *statement_body,
   case If: {
     if (expression != NULL) {
       check_expression(expression, local_table);
-      if (expression->type != boolean_type && expression->type != undef_type) {
+      if (expression->type != boolean_type) {
         printf("Line %d, col %d: Incompatible type %s in if statement\n",
                expression->line, expression->column,
                type_to_string(expression->type));
@@ -353,7 +351,7 @@ void check_statement(struct node *statement_body,
     }
     break;
 
-  case Block:
+  case Block: {
     if (statement_body->children != NULL) {
       struct node_list *curr = statement_body->children;
       while (curr != NULL) {
@@ -367,6 +365,7 @@ void check_statement(struct node *statement_body,
       }
     }
     break;
+  }
 
   default:
     if (statement_body->category == Call ||
@@ -483,10 +482,7 @@ void check_expression(struct node *expr, struct symbol_list *local_scope) {
   case Minus:
   case Plus: {
     struct node *child = getchild(expr, 0);
-    if (child == NULL) {
-      expr->type = undef_type;
-      break;
-    }
+
     enum type t = child->type;
 
     if (t == integer_type || t == double_type) {
@@ -512,7 +508,6 @@ void check_expression(struct node *expr, struct symbol_list *local_scope) {
              expr->line, expr->column, type_to_string(t));
       semantic_errors++;
     }
-
     break;
   }
 
