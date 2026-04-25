@@ -279,7 +279,7 @@ void check_statement(struct node *statement_body,
   case If: {
     if (expression != NULL) {
       check_expression(expression, local_table);
-      if (expression->type != boolean_type) {
+      if (expression->type != boolean_type && expression->type != undef_type) {
         printf("Line %d, col %d: Incompatible type %s in if statement\n",
                expression->line, expression->column,
                type_to_string(expression->type));
