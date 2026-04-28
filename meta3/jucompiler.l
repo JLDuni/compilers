@@ -32,7 +32,7 @@
   extern struct node *ast;
 
   void append_text(char *text, int len) {
-      string_buffer = realloc(string_buffer, string_len + len);
+      string_buffer = realloc(string_buffer, string_len + len + 1);
       memcpy(string_buffer + string_len, text, len);
       string_len += len;
       string_buffer[string_len] = '\0';
@@ -123,7 +123,7 @@ boolit "true"|"false"
 
 \"                      { BEGIN(STRING_STATE); start_string_line = line; start_string_column = collumn - yyleng; error = false;
                         string_buffer = malloc(1); string_len = 0; string_buffer[0] = '\0'; }
-<STRING_STATE>\"              { BEGIN(0); if(!error) OUT_STR_VALUE(STRLIT, string_buffer); }
+<STRING_STATE>\"              { BEGIN(0); if(!error) OUT_STR_VALUE(STRLIT, string_buffer); free(string_buffer); }
 <STRING_STATE>\\([fnrt\\"])   { append_text(yytext, yyleng); }
 <STRING_STATE>\\[^\n\r]|\\             { error = true; PRINT_ERROR("Line %d, col %d: invalid escape sequence (%s)\n", line, collumn - yyleng, yytext); }
 <STRING_STATE>(\r\n|\n|\r)         { PRINT_ERROR("Line %d, col %d: unterminated string literal\n", start_string_line, start_string_column); BEGIN(0); line++; collumn = 1; }

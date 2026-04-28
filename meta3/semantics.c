@@ -425,11 +425,15 @@ void check_expression(struct node *expr, struct symbol_list *local_scope) {
       semantic_errors++;
     } else if (val == 0.0) {
       int has_value = 0;
-      for (int i = 0; clean[i]; i++)
+      for (int i = 0; clean[i]; i++) {
+        if (clean[i] == 'e' || clean[i] == 'E' || clean[i] == '\0')
+          break;
+
         if (clean[i] >= '1' && clean[i] <= '9') {
           has_value = 1;
           break;
         }
+      }
 
       if (has_value) {
         printf("Line %d, col %d: Number %s out of bounds\n", expr->line,
@@ -470,6 +474,8 @@ void check_expression(struct node *expr, struct symbol_list *local_scope) {
 
     if (sym != NULL) {
       expr->type = sym->type;
+    } else if (is_reserved_underscore(expr)) {
+      expr->type = undef_type;
     } else {
       printf("Line %d, col %d: Cannot find symbol %s\n", expr->line,
              expr->column, expr->token);
