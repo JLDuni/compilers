@@ -57,8 +57,7 @@ int codegen_expression(struct node *expression) {
 
   case Call: {
     struct node *id_node = getchild(expression, 0);
-    struct node *args_list =
-        getchild(expression, 1); 
+    struct node *args_list = getchild(expression, 1);
 
     int args_regs[100];
     int num_args = 0;
@@ -127,32 +126,31 @@ void codegen_parameters(struct node *parameters) {
   }
 }
 
-void codegen_function(struct node *function) {
-  temporary = 1;
-  printf("define i32 @_%s(", getchild(function, 0)->token);
-  codegen_parameters(getchild(function, 1));
-  printf(") {\n");
-  int tmp = codegen_expression(getchild(function, 2));
-  printf("  ret i32 %%%d\n", tmp);
-  printf("}\n\n");
-}
-
 // code generation begins here, with the AST root node
 void codegen_program(struct node *program) {
-  // predeclared I/O functions
   printf("declare i32 @_read(i32)\n");
   printf("declare i32 @_write(i32)\n\n");
 
-  // generate code for each function
-  struct node_list *function = program->children;
-  while ((function = function->next) != NULL)
-    codegen_function(function->node);
+  struct node_list *current = program->children;
+  while (current != NULL) {
+    struct node *child = current->node;
 
-  // generate the entry point which calls main(integer) if it exists
+    if (child->category == FieldDecl) {
+      // TODO: Implement codegen_field
+      // codegen_field(child);
+    } else if (child->category == MethodDecl) {
+      // TODO: Implement codegen_method
+      // codegen_method(child);
+    }
+
+    current = current->next;
+  }
+
   struct symbol_list *entry = search_symbol(symbol_table, "main");
-  if (entry != NULL && entry->node->category == Function)
-    printf("define i32 @main() {\n"
-           "  %%1 = call i32 @_main(i32 0)\n"
-           "  ret i32 %%1\n"
-           "}\n");
+  if (entry != NULL && (entry->node->category == MethodDecl)) {
+    printf("define i32 @main() {\n");
+    printf("  %%1 = call i32 @_main(i32 0)\n");
+    printf("  ret i32 %%1\n");
+    printf("}\n");
+  }
 }
