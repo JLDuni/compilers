@@ -219,16 +219,21 @@ int main(int argc, char *argv[]) {
   if (lex_only) {
     while(yylex() != 0);
   } else {
-    yyparse();
-    int semantic_error = 0;
-    if (run_semantics && has_errors == 0) {
-      semantic_error = check_program(ast);
-      if(annotated_ast) print_tables(ast);
-      show(ast, 0);
-    } else if(show_ast && has_errors == 0) {
-      show(ast, 0);
-    } else if(has_errors == 0 && semantic_error == 0) {
-      codegen_program(ast);
+    yyparse(); 
+
+    if (has_errors == 0) {
+      int semantic_errors = check_program(ast);
+
+      if (show_ast) {
+        show(ast, 0);
+      } 
+      else if (annotated_ast) {
+        print_tables(ast);
+        show(ast, 0);
+      } 
+      else if (semantic_errors == 0) {
+        codegen_program(ast);
+      }
     }
   }
 

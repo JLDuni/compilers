@@ -605,7 +605,6 @@ void check_expression(struct node *expr, struct symbol_list *local_scope) {
     break;
   }
 
-  case Xor:
   case Lshift:
   case Rshift: {
     enum type t1 = getchild(expr, 0)->type;
@@ -614,6 +613,24 @@ void check_expression(struct node *expr, struct symbol_list *local_scope) {
     expr->type = integer_type;
 
     if (t1 != integer_type || t2 != integer_type) {
+      printf("Line %d, col %d: Operator %s cannot be applied to types %s, %s\n",
+             expr->line, expr->column, get_symbol_category(expr->category),
+             type_to_string(t1), type_to_string(t2));
+      semantic_errors++;
+    }
+    break;
+  }
+
+  case Xor: {
+    enum type t1 = getchild(expr, 0)->type;
+    enum type t2 = getchild(expr, 1)->type;
+
+    if (t1 == integer_type && t2 == integer_type) {
+      expr->type = integer_type;
+    } else if (t1 == boolean_type && t2 == boolean_type) {
+      expr->type = boolean_type;
+    } else {
+      expr->type = integer_type;
       printf("Line %d, col %d: Operator %s cannot be applied to types %s, %s\n",
              expr->line, expr->column, get_symbol_category(expr->category),
              type_to_string(t1), type_to_string(t2));
