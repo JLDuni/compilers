@@ -14,8 +14,8 @@ char *str_literals[1000];
 int str_count = 0;
 
 int add_string_literal(char *token) {
-    str_literals[str_count] = token;
-    return str_count++;
+  str_literals[str_count] = token;
+  return str_count++;
 }
 
 char *get_llvm_type(struct node *type_node) {
@@ -72,13 +72,23 @@ int codegen_expression(struct node *expr) {
   }
 
   case ParseArgs: {
-    struct node *id_node = getchild(expr, 0); // "args"
+    struct node *id_node = getchild(expr, 0);
     struct node *index_expr = getchild(expr, 1);
 
-    // Lógica avançada de GEP (GetElementPtr) para aceder a args[index] e chamar
-    // atoi
+    int base_reg = codegen_expression(id_node);
+
+    int idx_reg = codegen_expression(index_expr);
+
+    int gep_reg = temporary++;
+    printf("  %%%d = getelementptr inbounds i8*, i8** %%%d, i32 %%%d\n",
+           gep_reg, base_reg, idx_reg);
+
+    int str_reg = temporary++;
+    printf("  %%%d = load i8*, i8** %%%d\n", str_reg, gep_reg);
+
     tmp = temporary++;
-    // ... (A implementar: carregar array e passar a @_atoi)
+    printf("  %%%d = call i32 @atoi(i8* %%%d)\n", tmp, str_reg);
+
     break;
   }
 
@@ -275,10 +285,38 @@ void codegen_statement(struct node *statement) {
   case Print: {
     struct node *expr = getchild(statement, 0);
     if (expr->category == StrLit) {
-      // TODO String logic
+
+      int str_id = add_string_literal(expr->token);
+      int len = strlen(expr->token) + 1;
+
+      printf("  call i32 (i8*, ...) @printf(i8* getelementptr inbounds ([3 x "
+             "i8], [3 x i8]* @.fmt_str, i32 0, i32 0), i8* getelementptr "
+             "inbounds ([%d x i8], [%d x i8]* @.str.%d, i32 0, i32 0))\n",
+             len, len, str_id);
     } else {
-      int val_reg = codegen_expression(expr);
-      char *llvm_t = get_llvm_type(expr);
+
+      int temporary_register = codegen_expression(expr);
+      enum type type = expr->type;
+
+      if (type == integer_type) {
+        printf("  call i32 (i8*, ...) @printf(i8* getelementptr inbounds([3 x "
+               "i8], [3 x i8* .fmt_int, i32 0, i32 0]), i32 %%%d)",
+               temporary_register);
+      } else if (type == double_type) {
+        printf("  call i32 (i8*, ...) @printf(i8* getelementptr inbounds([7 x "
+               "i8], [7 x i8* .fmt_double, i32 0, i32 0]), i32 %%%d)",
+               temporary_register);
+      } else if (type == boolean_type) {
+        int str_ptr_reg = temporary++;
+        printf("  %%%d = select i1 %%%d, i8* getelementptr inbounds ([5 x i8], "
+               "[5 x i8]* @.fmt_true, i32 0, i32 0), i8* getelementptr "
+               "inbounds ([6 x i8], [6 x i8]* @.fmt_false, i32 0, i32 0)\n",
+               str_ptr_reg, temporary_register);
+
+        printf("  call i32 (i8*, ...) @printf(i8* getelementptr inbounds ([3 x "
+               "i8], [3 x i8]* @.fmt_str, i32 0, i32 0), i8* %%%d)\n",
+               str_ptr_reg);
+      }
     }
     break;
   }
@@ -320,7 +358,7 @@ void codegen_method(struct node *method_decl) {
   struct node *params = getchild(method_header, 2);
 
   char *return_type = get_llvm_type(type);
-  printf("define %s @_%s(", return_type, id_node);
+  printf("define %s @_%s(", return_type, id_node->token);
   codegen_parameters(params);
   printf(") {\n");
 
@@ -342,6 +380,23 @@ void codegen_method(struct node *method_decl) {
 void codegen_program(struct node *program) {
   printf("declare i32 @_read(i32)\n");
   printf("declare i32 @_write(i32)\n\n");
+
+  printf("declare i32 @printf(i8*, ...)\n\n");
+  printf("declare i32 @atoi(i8*)\n");
+
+  printf("@.fmt_int = private unnamed_addr constant [3 x i8] c\"%%d\\00\"\n");
+  printf("@.fmt_double = private unnamed_addr constant [7 x i8] "
+         "c\"%%.16e\\00\"\n");
+  printf("@.fmt_str = private unnamed_addr constant [3 x i8] c\"%%s\\00\"\n");
+  printf("@.fmt_true = private unnamed_addr constant [5 x i8] c\"true\\00\"\n");
+  printf("@.fmt_false = private unnamed_addr constant [6 x i8] "
+         "c\"false\\00\"\n\n");
+
+  for (int i = 0; i < str_count; i++) {
+    int len = strlen(str_literals[i]) + 1;
+    printf("@.str.%d = private unnamed_addr constant [%d x i8] c\"%s\\00\"\n",
+           i, len, str_literals[i]);
+  }
 
   struct node_list *current = program->children;
   while (current != NULL) {

@@ -5,7 +5,7 @@ YFLAGS = -d -y -Wcounterexamples
 CFLAGS = -Wall -Wno-unused-function -g
 
 TARGET = jucompiler
-OBJS = y.tab.o lex.yy.o ast.o semantics.o
+OBJS = y.tab.o lex.yy.o ast.o semantics.o codegen.o
 
 SCRIPT = ../comp/test.sh
 
@@ -26,8 +26,11 @@ ast.o: ast.c ast.h
 semantics.o: semantics.c semantics.h ast.h
 	$(CC) $(CFLAGS) -c semantics.c
 
+codegen.o: codegen.c codegen.h ast.h semantics.h
+	$(CC) $(CFLAGS) -c codegen.c
+
 clean:
-	rm -f $(TARGET) y.tab.c y.tab.h lex.yy.c *.o
+	rm -f $(TARGET) y.tab.c y.tab.h lex.yy.c *.o y.output
 
 test: all
 	./$(SCRIPT) ./$(TARGET)

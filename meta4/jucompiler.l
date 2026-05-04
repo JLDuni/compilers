@@ -2,9 +2,11 @@
   #include <string.h>
   #include "y.tab.h"  
   #include "ast.h"
+  #include "codegen.h"
   #include "semantics.h"
 
   int lex_only = 0;
+  int codegen = 0;
   int show_ast = 0;
   int run_semantics = 1;
   int collumn = 1;
@@ -207,6 +209,10 @@ int main(int argc, char *argv[]) {
       run_semantics = 1;
       print_error = 1;
       annotated_ast = 1;
+    } else if (strcmp(argv[1], "-e3") == 0) {
+      run_semantics = 1;
+      print_error = 1;
+      annotated_ast = 0;
     }
   }
 
@@ -214,12 +220,15 @@ int main(int argc, char *argv[]) {
     while(yylex() != 0);
   } else {
     yyparse();
+    int semantic_error = 0;
     if (run_semantics && has_errors == 0) {
-      check_program(ast);
+      semantic_error = check_program(ast);
       if(annotated_ast) print_tables(ast);
       show(ast, 0);
     } else if(show_ast && has_errors == 0) {
       show(ast, 0);
+    } else if(has_errors == 0 && semantic_error == 0) {
+      codegen_program(ast);
     }
   }
 
@@ -229,6 +238,7 @@ int main(int argc, char *argv[]) {
   free(string_buffer);
   return 0;
 }
+
 int yywrap() {  /* called on EOF, return 1 to terminate */
     return 1;
 }
