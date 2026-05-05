@@ -7,6 +7,7 @@
 
 int temporary;
 int label_count;
+struct node *current_method_node = NULL;
 
 char *current_method_return_type = NULL;
 extern struct symbol_list *symbol_table;
@@ -83,6 +84,27 @@ const char *get_mangling_type(enum type t) {
   return "";
 }
 
+void allocate_locals_at_entry(struct node *n) {
+  if (n == NULL)
+    return;
+
+  if (n->category == VarDecl) {
+    struct node *type_node = getchild(n, 0);
+    char *llvm_type = get_llvm_type(type_node);
+    int i = 1;
+    struct node *id_node;
+    while ((id_node = getchild(n, i++)) != NULL) {
+      printf("  %%%s = alloca %s\n", id_node->token, llvm_type);
+    }
+  } else if (n->children != NULL) {
+    struct node_list *curr = n->children->next;
+    while (curr != NULL) {
+      allocate_locals_at_entry(curr->node);
+      curr = curr->next;
+    }
+  }
+}
+
 int get_string_length(char *str) {
   int len = 1;
   int start = (str[0] == '"') ? 1 : 0;
@@ -131,6 +153,15 @@ int add_string_literal(char *token) {
 }
 
 int is_global_variable(char *identifier) {
+  if (current_method_node != NULL &&
+      current_method_node->local_symbols != NULL) {
+    struct symbol_list *local_sym =
+        search_symbol(current_method_node->local_symbols, identifier);
+    if (local_sym != NULL) {
+      return 0;
+    }
+  }
+
   struct symbol_list *sym = search_symbol(symbol_table, identifier);
   if (sym != NULL && sym->node != NULL && sym->node->category == FieldDecl) {
     return 1;
@@ -235,45 +266,49 @@ int codegen_expression(struct node *expr) {
 
   case And: {
     int id = label_count++;
-    int res_ptr = temporary++;
-    printf("  %%%d = alloca i1\n", res_ptr);
-
     int t1 = codegen_expression(getchild(expr, 0));
-    printf("  store i1 %%%d, i1* %%%d\n", t1, res_ptr);
 
+    printf("  br label %%L%d_and_start\n", id);
+    printf("L%d_and_start:\n", id);
     printf("  br i1 %%%d, label %%L%d_eval_right, label %%L%d_end\n", t1, id,
            id);
 
     printf("L%d_eval_right:\n", id);
     int t2 = codegen_expression(getchild(expr, 1));
-    printf("  store i1 %%%d, i1* %%%d\n", t2, res_ptr);
+
+    printf("  br label %%L%d_eval_right_end\n", id);
+    printf("L%d_eval_right_end:\n", id);
     printf("  br label %%L%d_end\n", id);
 
     printf("L%d_end:\n", id);
     tmp = temporary++;
-    printf("  %%%d = load i1, i1* %%%d\n", tmp, res_ptr);
+    printf("  %%%d = phi i1 [ false, %%L%d_and_start ], [ %%%d, "
+           "%%L%d_eval_right_end ]\n",
+           tmp, id, t2, id);
     return tmp;
   }
 
   case Or: {
     int id = label_count++;
-    int res_ptr = temporary++;
-    printf("  %%%d = alloca i1\n", res_ptr);
-
     int t1 = codegen_expression(getchild(expr, 0));
-    printf("  store i1 %%%d, i1* %%%d\n", t1, res_ptr);
 
+    printf("  br label %%L%d_or_start\n", id);
+    printf("L%d_or_start:\n", id);
     printf("  br i1 %%%d, label %%L%d_end, label %%L%d_eval_right\n", t1, id,
            id);
 
     printf("L%d_eval_right:\n", id);
     int t2 = codegen_expression(getchild(expr, 1));
-    printf("  store i1 %%%d, i1* %%%d\n", t2, res_ptr);
+    printf("  br label %%L%d_eval_right_end\n", id);
+
+    printf("L%d_eval_right_end:\n", id);
     printf("  br label %%L%d_end\n", id);
 
     printf("L%d_end:\n", id);
     tmp = temporary++;
-    printf("  %%%d = load i1, i1* %%%d\n", tmp, res_ptr);
+    printf("  %%%d = phi i1 [ true, %%L%d_or_start ], [ %%%d, "
+           "%%L%d_eval_right_end ]\n",
+           tmp, id, t2, id);
     return tmp;
   }
 
@@ -370,14 +405,30 @@ int codegen_expression(struct node *expr) {
     char *types_copy = (id_node->parameter_types_str)
                            ? strdup(id_node->parameter_types_str)
                            : NULL;
-    char *token_str = NULL;
-    char *save_ptr = NULL;
+    char *target_types[100];
+    int expected_args = 0;
+
     if (types_copy) {
       char *start = strchr(types_copy, '(');
-      char *end = strrchr(types_copy, ')');
-      if (start && end) {
-        *end = '\0';
-        token_str = strtok_r(start + 1, ",", &save_ptr);
+      if (start && *(start + 1) != ')') {
+        char *end = strrchr(types_copy, ')');
+        if (end) {
+          *end = '\0';
+          char *save_ptr = NULL;
+          char *token = strtok_r(start + 1, ",", &save_ptr);
+          while (token) {
+            char clean_token[256];
+            int c_idx = 0;
+            for (int k = 0; token[k] != '\0'; k++) {
+              if (token[k] != ' ' && token[k] != '\t') {
+                clean_token[c_idx++] = token[k];
+              }
+            }
+            clean_token[c_idx] = '\0';
+            target_types[expected_args++] = strdup(clean_token);
+            token = strtok_r(NULL, ",", &save_ptr);
+          }
+        }
       }
     }
 
@@ -394,7 +445,11 @@ int codegen_expression(struct node *expr) {
       int reg = codegen_expression(arg);
       char *tipo_llvm = get_llvm_type(arg);
 
-      if (token_str && strstr(token_str, "double") &&
+      char *expected_type = (actual_num_args < expected_args)
+                                ? target_types[actual_num_args]
+                                : NULL;
+
+      if (expected_type && strstr(expected_type, "double") &&
           strcmp(tipo_llvm, "i32") == 0) {
         int cast_reg = temporary++;
         printf("  %%%d = sitofp i32 %%%d to double\n", cast_reg, reg);
@@ -405,8 +460,6 @@ int codegen_expression(struct node *expr) {
         final_types[actual_num_args] = tipo_llvm;
       }
 
-      if (token_str)
-        token_str = strtok_r(NULL, ",", &save_ptr);
       actual_num_args++;
     }
 
@@ -429,6 +482,7 @@ int codegen_expression(struct node *expr) {
 
     if (types_copy)
       free(types_copy);
+
     return res_reg;
   }
 
@@ -535,14 +589,6 @@ void codegen_statement(struct node *statement) {
   }
 
   case VarDecl: {
-    struct node *type_node = getchild(statement, 0);
-    char *llvm_type = get_llvm_type(type_node);
-
-    int i = 1;
-    struct node *id_node;
-    while ((id_node = getchild(statement, i++)) != NULL) {
-      printf("  %%%s = alloca %s\n", id_node->token, llvm_type);
-    }
     break;
   }
 
@@ -617,14 +663,14 @@ void codegen_statement(struct node *statement) {
       int val_reg = codegen_expression(expr);
       char *llvm_t = get_llvm_type(expr);
 
-      if (current_method_return_type != NULL &&
-          strcmp(current_method_return_type, "double") == 0 &&
-          strcmp(llvm_t, "i32") == 0) {
-
+      if (strcmp(llvm_t, "void") == 0) {
+        printf("  ret void\n");
+      } else if (current_method_return_type != NULL &&
+                 strcmp(current_method_return_type, "double") == 0 &&
+                 strcmp(llvm_t, "i32") == 0) {
         int cast_reg = temporary++;
         printf("  %%%d = sitofp i32 %%%d to double\n", cast_reg, val_reg);
         printf("  ret double %%%d\n", cast_reg);
-
       } else {
         printf("  ret %s %%%d\n", llvm_t, val_reg);
       }
@@ -716,6 +762,7 @@ void codegen_field_decl(struct node *field_decl) {
 void codegen_method(struct node *method_decl) {
   temporary = 1;
   block_terminated = 0;
+  current_method_node = method_decl;
 
   struct node *method_header = getchild(method_decl, 0);
   struct node *method_body = getchild(method_decl, 1);
@@ -783,6 +830,7 @@ void codegen_method(struct node *method_decl) {
   }
 
   if (method_body != NULL) {
+    allocate_locals_at_entry(method_body);
     codegen_statement(method_body);
   }
 
