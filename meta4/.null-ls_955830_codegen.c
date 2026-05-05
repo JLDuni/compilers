@@ -5,10 +5,9 @@
 #include <stdlib.h>
 #include <string.h>
 
-int temporary;
+int temporary; // sequence of temporary registers in a function
 int label_count;
 
-char *current_method_return_type = NULL;
 extern struct symbol_list *symbol_table;
 
 char *str_literals[1000];
@@ -354,13 +353,12 @@ int codegen_expression(struct node *expr) {
       char *p_str = id_node->parameter_types_str;
       for (int k = 0; p_str[k] != '\0'; k++) {
         if (p_str[k] == '(') {
-          if (p_str[k + 1] != ')' && p_str[k + 1] != '\0')
+          if (p_str[k + 1] != ')' && p_str[k + 1] != '\0') {
             strcat(mangled_name, "_");
+          }
         } else if (p_str[k] == ',') {
           strcat(mangled_name, "_");
-        } else if (p_str[k] == '[') {
-          strcat(mangled_name, "Array");
-        } else if (p_str[k] != ']' && p_str[k] != ')' && p_str[k] != ' ') {
+        } else if (p_str[k] != ')' && p_str[k] != ' ') {
           char temp[2] = {p_str[k], '\0'};
           strcat(mangled_name, temp);
         }
@@ -568,7 +566,7 @@ void codegen_statement(struct node *statement) {
     int then_terminated = block_terminated;
 
     printf("L%d_else:\n", id);
-    block_terminated = 0;
+    block_terminated = 0; // Novo label reseta a flag
     if (getchild(statement, 2) != NULL) {
       codegen_statement(getchild(statement, 2));
     }
@@ -609,25 +607,11 @@ void codegen_statement(struct node *statement) {
   }
 
   case Return: {
-    if (block_terminated)
-      break;
-
     struct node *expr = getchild(statement, 0);
     if (expr != NULL) {
       int val_reg = codegen_expression(expr);
       char *llvm_t = get_llvm_type(expr);
-
-      if (current_method_return_type != NULL &&
-          strcmp(current_method_return_type, "double") == 0 &&
-          strcmp(llvm_t, "i32") == 0) {
-
-        int cast_reg = temporary++;
-        printf("  %%%d = sitofp i32 %%%d to double\n", cast_reg, val_reg);
-        printf("  ret double %%%d\n", cast_reg);
-
-      } else {
-        printf("  ret %s %%%d\n", llvm_t, val_reg);
-      }
+      printf("  ret %s %%%d\n", llvm_t, val_reg);
     } else {
       printf("  ret void\n");
     }
@@ -725,22 +709,18 @@ void codegen_method(struct node *method_decl) {
   struct node *params = getchild(method_header, 2);
 
   char *return_type = get_llvm_type(type);
-  current_method_return_type = return_type;
 
   bool is_real_main = false;
-  if (strcmp(id_node->token, "main") == 0 && params != NULL &&
-      params->children != NULL) {
-    struct node_list *first_param = params->children->next;
-    if (first_param != NULL && first_param->next == NULL) {
-      struct node *param_decl = first_param->node;
-      struct node *type_node = getchild(param_decl, 0);
-      if (type_node != NULL && type_node->category == StringArray) {
-        is_real_main = true;
-      }
+  if (strcmp(id_node->token, "main") == 0 &&
+      count_list(params->children) == 1) {
+    struct node *param_decl = getchild(params, 0);
+    struct node *type_node = getchild(param_decl, 0);
+    if (type_node->category == StringArray) {
+      is_real_main = true;
     }
   }
 
-  char mangled_name[512];
+  char mangled_name[256];
   strcpy(mangled_name, id_node->token);
 
   if (!is_real_main) {
@@ -748,16 +728,8 @@ void codegen_method(struct node *method_decl) {
       struct node_list *curr_param = params->children->next;
       while (curr_param != NULL) {
         struct node *param_decl = curr_param->node;
-        struct node *param_type_node = getchild(param_decl, 0);
-
-        if (param_type_node != NULL) {
-          if (param_type_node->category == StringArray) {
-            strcat(mangled_name, "_StringArray");
-          } else {
-            enum type t = category_type(param_type_node->category);
-            strcat(mangled_name, get_mangling_type(t));
-          }
-        }
+        enum type t = category_type(getchild(param_decl, 0)->category);
+        strcat(mangled_name, get_mangling_type(t));
         curr_param = curr_param->next;
       }
     }
@@ -799,6 +771,7 @@ void codegen_method(struct node *method_decl) {
   printf("}\n\n");
 }
 
+// code generation begins here, with the AST root node
 void codegen_program(struct node *program) {
   printf("declare i32 @printf(i8*, ...)\n\n");
   printf("declare i32 @atoi(i8*)\n");
@@ -850,7 +823,7 @@ void codegen_program(struct node *program) {
         strcat(buffer, "\\0C");
         j++;
       } else if (str[j] == '\\' && str[j + 1] == 'r') {
-        strcat(buffer, "\\0D");
+        strcat(buffer, "\\0A");
         j++;
       } else {
         int pos = strlen(buffer);
